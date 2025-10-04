@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/word_data.dart';
 import '../constants/colors.dart';
 
-// Виджет экранной клавиатуры
 class GameKeyboard extends StatelessWidget {
   final Function(String) onLetterTap;
   final VoidCallback onDeleteTap;
@@ -17,17 +16,15 @@ class GameKeyboard extends StatelessWidget {
     required this.keyboardStatus,
   }) : super(key: key);
 
-  // Раскладка клавиатуры (русская)
   static const List<List<String>> _keyboardLayout = [
     ['Й', 'Ц', 'У', 'К', 'Е', 'Н', 'Г', 'Ш', 'Щ', 'З', 'Х', 'Ъ'],
     ['Ф', 'Ы', 'В', 'А', 'П', 'Р', 'О', 'Л', 'Д', 'Ж', 'Э'],
     ['ENTER', 'Я', 'Ч', 'С', 'М', 'И', 'Т', 'Ь', 'Б', 'Ю', 'DELETE'],
   ];
 
-  // Получить цвет клавиши в зависимости от статуса
   Color _getKeyColor(String key) {
     if (key == 'ENTER' || key == 'DELETE') {
-      return AppColors.keyboardDefault;
+      return AppColors.primary;
     }
 
     final status = keyboardStatus[key] ?? LetterStatus.empty;
@@ -43,8 +40,11 @@ class GameKeyboard extends StatelessWidget {
     }
   }
 
-  // Получить цвет текста клавиши
   Color _getKeyTextColor(String key) {
+    if (key == 'ENTER' || key == 'DELETE') {
+      return Colors.white;
+    }
+
     final status = keyboardStatus[key] ?? LetterStatus.empty;
     if (status == LetterStatus.correct ||
         status == LetterStatus.present ||
@@ -57,7 +57,7 @@ class GameKeyboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
       child: Column(
         children: _keyboardLayout.map((row) {
           return Padding(
@@ -65,13 +65,12 @@ class GameKeyboard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: row.map((key) {
-                // Определяем ширину клавиши
                 final isSpecialKey = key == 'ENTER' || key == 'DELETE';
-                final keyWidth = isSpecialKey ? 65.0 : 32.0;
+                final keyWidth = isSpecialKey ? 70.0 : 32.0;
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                  child: _KeyButton(
+                  child: _KawaiiKeyButton(
                     label: key,
                     width: keyWidth,
                     backgroundColor: _getKeyColor(key),
@@ -96,15 +95,14 @@ class GameKeyboard extends StatelessWidget {
   }
 }
 
-// Виджет одной кнопки клавиатуры
-class _KeyButton extends StatelessWidget {
+class _KawaiiKeyButton extends StatefulWidget {
   final String label;
   final double width;
   final Color backgroundColor;
   final Color textColor;
   final VoidCallback onTap;
 
-  const _KeyButton({
+  const _KawaiiKeyButton({
     Key? key,
     required this.label,
     required this.width,
@@ -114,26 +112,95 @@ class _KeyButton extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<_KawaiiKeyButton> createState() => _KawaiiKeyButtonState();
+}
+
+class _KawaiiKeyButtonState extends State<_KawaiiKeyButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _isPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    setState(() => _isPressed = true);
+    _controller.forward();
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    setState(() => _isPressed = false);
+    _controller.reverse();
+    widget.onTap();
+  }
+
+  void _handleTapCancel() {
+    setState(() => _isPressed = false);
+    _controller.reverse();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: backgroundColor,
-      borderRadius: BorderRadius.circular(4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: width,
-          height: 58,
-          alignment: Alignment.center,
-          child: Text(
-            label == 'DELETE' ? '⌫' : label,
-            style: TextStyle(
-              fontSize: label == 'ENTER' || label == 'DELETE' ? 14 : 18,
-              fontWeight: FontWeight.w600,
-              color: textColor,
+    return GestureDetector(
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Container(
+              width: widget.width,
+              height: 56,
+              decoration: BoxDecoration(
+                color: widget.backgroundColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: _isPressed
+                    ? []
+                    : [
+                  BoxShadow(
+                    color: AppColors.shadow,
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: widget.label == 'DELETE'
+                    ? Icon(
+                  Icons.backspace_outlined,
+                  color: widget.textColor,
+                  size: 22,
+                )
+                    : Text(
+                  widget.label == 'ENTER' ? '✓' : widget.label,
+                  style: TextStyle(
+                    fontSize: widget.label == 'ENTER' ? 24 : 18,
+                    fontWeight: FontWeight.w800,
+                    color: widget.textColor,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

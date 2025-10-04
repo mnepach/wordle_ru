@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/game_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() {
-  // Блокируем ориентацию только в портретный режим
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -22,12 +21,12 @@ class WordleApp extends StatelessWidget {
       title: 'Wordle РУ',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.grey,
-        scaffoldBackgroundColor: Colors.white,
+        primarySwatch: Colors.pink,
+        scaffoldBackgroundColor: const Color(0xFFFFF0F5),
         fontFamily: 'Arial',
         useMaterial3: true,
       ),
-      home: const GameScreen(),
+      home: const SplashScreen(),
     );
   }
 }
