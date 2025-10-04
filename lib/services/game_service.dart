@@ -1,5 +1,5 @@
 import '../models/word_data.dart';
-import '../constants/words.dart';
+import './words_api_service.dart';
 
 // Сервис с логикой игры
 class GameService {
@@ -65,8 +65,8 @@ class GameService {
 
     final guessWord = currentRow.getWord();
 
-    // Проверяем, существует ли такое слово
-    if (!WordsList.isValidWord(guessWord)) {
+    // Проверяем, существует ли такое слово через API
+    if (!WordsApiService.isValidWord(guessWord)) {
       return false;
     }
 

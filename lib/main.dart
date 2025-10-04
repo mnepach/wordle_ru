@@ -18,7 +18,7 @@ class WordleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Wordle РУ',
+      title: 'Wordle РУ かわいい',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.pink,

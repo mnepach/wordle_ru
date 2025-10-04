@@ -22,9 +22,14 @@ class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateM
   late Animation<double> _scaleAnimation;
   late Animation<double> _bounceAnimation;
 
+  LetterStatus _previousStatus = LetterStatus.empty;
+  bool _isAnimating = false;
+
   @override
   void initState() {
     super.initState();
+    _previousStatus = widget.letter.status;
+
     _controller = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -56,20 +61,40 @@ class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateM
   void didUpdateWidget(LetterTile oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Запуск анимации при проверке слова
-    if (oldWidget.letter.status == LetterStatus.notChecked &&
+    // Запуск анимации только при смене статуса с notChecked на другой
+    if (_previousStatus == LetterStatus.notChecked &&
         widget.letter.status != LetterStatus.notChecked &&
-        widget.letter.status != LetterStatus.empty) {
+        widget.letter.status != LetterStatus.empty &&
+        !_isAnimating) {
+      _isAnimating = true;
+      _previousStatus = widget.letter.status;
+
       Future.delayed(Duration(milliseconds: widget.animationDelay), () {
-        if (mounted) {
-          _controller.forward(from: 0);
+        if (mounted && _isAnimating) {
+          _controller.forward(from: 0).then((_) {
+            if (mounted) {
+              setState(() {
+                _isAnimating = false;
+              });
+            }
+          });
         }
       });
     }
-
     // Анимация при добавлении буквы
-    if (oldWidget.letter.character.isEmpty && widget.letter.character.isNotEmpty) {
-      _controller.forward(from: 0).then((_) => _controller.reverse());
+    else if (oldWidget.letter.character.isEmpty &&
+        widget.letter.character.isNotEmpty &&
+        !_isAnimating) {
+      _previousStatus = widget.letter.status;
+      _controller.forward(from: 0).then((_) {
+        if (mounted) {
+          _controller.reverse();
+        }
+      });
+    }
+    // Просто обновляем статус без анимации
+    else if (oldWidget.letter.status != widget.letter.status) {
+      _previousStatus = widget.letter.status;
     }
   }
 
@@ -125,6 +150,18 @@ class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateM
 
         final showFront = angle < 3.14159 / 2;
 
+        // Определяем, показывать ли старый или новый цвет
+        final displayStatus = showFront ? LetterStatus.notChecked : widget.letter.status;
+        final backgroundColor = showFront
+            ? AppColors.empty
+            : _getBackgroundColor();
+        final borderColor = showFront
+            ? _getBorderColor()
+            : _getBackgroundColor();
+        final textColor = showFront || widget.letter.status == LetterStatus.notChecked
+            ? AppColors.text
+            : Colors.white;
+
         return Transform(
           transform: transform,
           alignment: Alignment.center,
@@ -132,13 +169,9 @@ class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateM
             width: 62,
             height: 62,
             decoration: BoxDecoration(
-              color: showFront || widget.letter.status == LetterStatus.notChecked
-                  ? AppColors.empty
-                  : _getBackgroundColor(),
+              color: backgroundColor,
               border: Border.all(
-                color: showFront || widget.letter.status == LetterStatus.notChecked
-                    ? _getBorderColor()
-                    : _getBackgroundColor(),
+                color: borderColor,
                 width: 3,
               ),
               borderRadius: BorderRadius.circular(12),
@@ -166,15 +199,13 @@ class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateM
                         style: TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w900,
-                          color: showFront || widget.letter.status == LetterStatus.notChecked
-                              ? AppColors.text
-                              : Colors.white,
+                          color: textColor,
                         ),
                       ),
                     ),
                   ),
                 ),
-                // Блестки при правильной букве
+                // Блестки при правильной букве (каомодзи)
                 if (widget.letter.status == LetterStatus.correct && !showFront)
                   Positioned(
                     top: 4,
@@ -182,8 +213,8 @@ class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateM
                     child: Opacity(
                       opacity: _bounceAnimation.value,
                       child: const Text(
-                        '✨',
-                        style: TextStyle(fontSize: 16),
+                        '✧',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
                       ),
                     ),
                   ),

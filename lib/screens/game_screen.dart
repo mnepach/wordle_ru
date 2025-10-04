@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/game_service.dart';
-import '../constants/words.dart';
+import '../services/words_api_service.dart';
 import '../constants/colors.dart';
 import '../widgets/game_board.dart';
 import '../widgets/keyboard.dart';
+import '../widgets/floating_character.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({Key? key}) : super(key: key);
@@ -17,11 +18,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late GameService _gameService;
   final FocusNode _focusNode = FocusNode();
   late AnimationController _headerAnimationController;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _startNewGame();
+    _initializeGame();
 
     _headerAnimationController = AnimationController(
       duration: const Duration(seconds: 2),
@@ -30,6 +32,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+    });
+  }
+
+  Future<void> _initializeGame() async {
+    await WordsApiService.initialize();
+    setState(() {
+      _gameService = GameService(targetWord: WordsApiService.getWordOfTheDay());
+      _isLoading = false;
     });
   }
 
@@ -42,7 +52,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _startNewGame() {
     setState(() {
-      _gameService = GameService(targetWord: WordsList.getWordOfTheDay());
+      _gameService = GameService(targetWord: WordsApiService.getWordOfTheDay());
     });
   }
 
@@ -87,9 +97,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     if (!success) {
       final currentRow = _gameService.getCurrentRow();
       if (currentRow.isFilled()) {
-        _showMessage('Слова нет в словаре 😢');
+        _showMessage('Слова нет в словаре (╥﹏╥)');
       } else {
-        _showMessage('Недостаточно букв ✨');
+        _showMessage('Недостаточно букв (・_・;)');
       }
       return;
     }
@@ -149,9 +159,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Эмодзи
+              // Каомодзи
               Text(
-                _gameService.isWinner ? '🎉✨🌟' : '😢💔',
+                _gameService.isWinner ? '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧' : '(╥﹏╥)',
                 style: const TextStyle(fontSize: 48),
               ),
               const SizedBox(height: 16),
@@ -214,7 +224,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ],
                   ),
                   child: Text(
-                    'Отгадано за ${_gameService.currentRowIndex + 1} ${_getPluralAttempts(_gameService.currentRowIndex + 1)}!',
+                    'Отгадано за ${_gameService.currentRowIndex + 1} ${_getPluralAttempts(_gameService.currentRowIndex + 1)}! ٩(◕‿◕｡)۶',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 18,
@@ -241,7 +251,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   elevation: 5,
                 ),
                 child: const Text(
-                  'Новая игра ✨',
+                  'Новая игра (｡♥‿♥｡)',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -267,6 +277,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.gradientStart, AppColors.gradientEnd],
+            ),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+          ),
+        ),
+      );
+    }
+
     return RawKeyboardListener(
       focusNode: _focusNode,
       onKey: _handleKeyEvent,
@@ -279,33 +308,43 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               colors: [AppColors.gradientStart, AppColors.gradientEnd],
             ),
           ),
-          child: SafeArea(
-            child: GestureDetector(
-              onTap: () => _focusNode.requestFocus(),
-              child: Column(
-                children: [
-                  // Kawaii хедер
-                  _buildKawaiiHeader(),
-                  const SizedBox(height: 10),
-                  // Игровое поле
-                  Expanded(
-                    child: Center(
-                      child: SingleChildScrollView(
-                        child: GameBoard(rows: _gameService.rows),
+          child: Stack(
+            children: [
+              // Анимированные персонажи на фоне
+              const FloatingCharacter(startPosition: Alignment.bottomLeft),
+              const FloatingCharacter(startPosition: Alignment.bottomRight, delay: 1.5),
+              const FloatingCharacter(startPosition: Alignment.centerLeft, delay: 3.0),
+
+              // Основной контент
+              SafeArea(
+                child: GestureDetector(
+                  onTap: () => _focusNode.requestFocus(),
+                  child: Column(
+                    children: [
+                      // Kawaii хедер
+                      _buildKawaiiHeader(),
+                      const SizedBox(height: 10),
+                      // Игровое поле
+                      Expanded(
+                        child: Center(
+                          child: SingleChildScrollView(
+                            child: GameBoard(rows: _gameService.rows),
+                          ),
+                        ),
                       ),
-                    ),
+                      // Клавиатура
+                      GameKeyboard(
+                        onLetterTap: _onLetterPressed,
+                        onDeleteTap: _onDeletePressed,
+                        onEnterTap: _onEnterPressed,
+                        keyboardStatus: _gameService.keyboardStatus,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                   ),
-                  // Клавиатура
-                  GameKeyboard(
-                    onLetterTap: _onLetterPressed,
-                    onDeleteTap: _onDeletePressed,
-                    onEnterTap: _onEnterPressed,
-                    keyboardStatus: _gameService.keyboardStatus,
-                  ),
-                  const SizedBox(height: 10),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -323,7 +362,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             icon: Icons.help_outline_rounded,
             onPressed: _showHelpDialog,
           ),
-          // Логотип с анимацией
+          // Логотип с анимацией и иероглифами
           AnimatedBuilder(
             animation: _headerAnimationController,
             builder: (context, child) {
@@ -332,31 +371,58 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 child: child,
               );
             },
-            child: Row(
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                const Text(
-                  '✨ ',
-                  style: TextStyle(fontSize: 24),
-                ),
-                const Text(
-                  'WORDLE',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
-                    color: AppColors.text,
-                    shadows: [
-                      Shadow(
-                        color: AppColors.shadow,
-                        offset: Offset(0, 2),
-                        blurRadius: 8,
+                const Row(
+                  children: [
+                    Text(
+                      'WORDLE',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 4,
+                        color: AppColors.text,
+                        shadows: [
+                          Shadow(
+                            color: AppColors.shadow,
+                            offset: Offset(0, 2),
+                            blurRadius: 8,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const Text(
-                  ' ✨',
-                  style: TextStyle(fontSize: 24),
+                // Kawaii иероглифы в углу
+                Positioned(
+                  top: -8,
+                  right: -30,
+                  child: Transform.rotate(
+                    angle: 0.3,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadow,
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'かわいい',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -391,7 +457,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '💡 Как играть',
+                'Как играть (◕‿◕)',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
@@ -407,19 +473,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               _HelpExample(
                 letter: 'П',
                 color: AppColors.correct,
-                description: 'Буква на своём месте ✨',
+                description: 'Буква на своём месте ♪(´▽｀)',
               ),
               const SizedBox(height: 12),
               _HelpExample(
                 letter: 'О',
                 color: AppColors.present,
-                description: 'Буква есть, но не здесь 🔄',
+                description: 'Буква есть, но не здесь (・_・ヾ',
               ),
               const SizedBox(height: 12),
               _HelpExample(
                 letter: 'Т',
                 color: AppColors.absent,
-                description: 'Буквы нет в слове 💔',
+                description: 'Буквы нет в слове (｡•́︿•̀｡)',
               ),
               const SizedBox(height: 24),
               Center(
@@ -434,7 +500,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   child: const Text(
-                    'Понятно! 💖',
+                    'Понятно! (｡♥‿♥｡)',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -457,7 +523,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
         title: const Text(
-          '🎮 Новая игра?',
+          'Новая игра? (・・？)',
           style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
         ),
         content: const Text(
@@ -534,43 +600,44 @@ class _HelpExample extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-        children: [
+      children: [
         Container(
-        width: 45,
-        height: 45,
-        decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-    boxShadow: [
-    BoxShadow(
-    color: AppColors.shadow,
-    blurRadius: 6,
-    offset: const Offset(0, 2),
-    ),
-    ],
-    ),
-    child: Center(
-    child: Text(
-    letter,
-    style: const TextStyle(fontSize: 22,
-      fontWeight: FontWeight.bold,
-      color: Colors.white,
-    ),
-    ),
-    ),
-        ),
-          const SizedBox(width: 16),
-          Expanded(
+          width: 45,
+          height: 45,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.shadow,
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
             child: Text(
-              description,
+              letter,
               style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.text,
-                fontWeight: FontWeight.w500,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),
-        ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            description,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.text,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

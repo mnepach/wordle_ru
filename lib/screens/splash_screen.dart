@@ -48,21 +48,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     // Запускаем анимацию прыжка
     _bounceController.forward();
-
-    // Автоматический переход через 3 секунды
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const GameScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 800),
-          ),
-        );
-      }
-    });
   }
 
   @override
@@ -71,6 +56,18 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _floatController.dispose();
     _sparkleController.dispose();
     super.dispose();
+  }
+
+  void _startGame() {
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const GameScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 800),
+      ),
+    );
   }
 
   @override
@@ -120,7 +117,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     child: _KawaiiLogo(),
                   ),
                   const SizedBox(height: 40),
-                  // Название игры
+                  // Название игры с иероглифами
                   AnimatedBuilder(
                     animation: _floatController,
                     builder: (context, child) {
@@ -129,37 +126,90 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         child: child,
                       );
                     },
-                    child: const Text(
-                      'WORDLE',
-                      style: TextStyle(
-                        fontSize: 56,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.text,
-                        letterSpacing: 8,
-                        shadows: [
-                          Shadow(
-                            color: AppColors.shadow,
-                            offset: Offset(0, 4),
-                            blurRadius: 12,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Text(
+                          'WORDLE',
+                          style: TextStyle(
+                            fontSize: 56,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.text,
+                            letterSpacing: 8,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.shadow,
+                                offset: Offset(0, 4),
+                                blurRadius: 12,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        // Kawaii иероглифы в углу
+                        Positioned(
+                          top: -10,
+                          right: -35,
+                          child: Transform.rotate(
+                            angle: 0.3,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.shadow,
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                'かわいい',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 80),
+                  // Кнопка начать
+                  AnimatedBuilder(
+                    animation: _floatController,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(0, _floatAnimation.value * 0.3),
+                        child: child,
+                      );
+                    },
+                    child: ElevatedButton(
+                      onPressed: _startGame,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 8,
+                        shadowColor: AppColors.shadow,
+                      ),
+                      child: const Text(
+                        'Начать (⌒‿⌒)',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  // Подзаголовок
-                  Text(
-                    'Русская версия',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text.withOpacity(0.7),
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 60),
-                  // Индикатор загрузки
-                  _LoadingIndicator(),
                 ],
               ),
             ),
@@ -352,23 +402,6 @@ class _Heart extends StatelessWidget {
       Icons.favorite,
       size: size,
       color: AppColors.heart,
-    );
-  }
-}
-
-// Индикатор загрузки
-class _LoadingIndicator extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: CircularProgressIndicator(
-        strokeWidth: 3,
-        valueColor: AlwaysStoppedAnimation<Color>(
-          AppColors.primary,
-        ),
-      ),
     );
   }
 }
