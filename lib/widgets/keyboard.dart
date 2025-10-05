@@ -56,23 +56,36 @@ class GameKeyboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Вычисляем размер клавиши на основе ширины экрана
+    final horizontalPadding = 8.0;
+    final keySpacing = 2.0;
+    // Для первого ряда (12 клавиш)
+    final availableWidth = screenWidth - (horizontalPadding * 2);
+    final totalSpacing = keySpacing * 11; // 11 промежутков между 12 клавишами
+    final keyWidth = (availableWidth - totalSpacing) / 12;
+    final clampedKeyWidth = keyWidth.clamp(24.0, 32.0);
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: horizontalPadding),
       child: Column(
-        children: _keyboardLayout.map((row) {
+        children: _keyboardLayout.asMap().entries.map((entry) {
+          final rowIndex = entry.key;
+          final row = entry.value;
+
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            padding: const EdgeInsets.symmetric(vertical: 3.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: row.map((key) {
                 final isSpecialKey = key == 'ENTER' || key == 'DELETE';
-                final keyWidth = isSpecialKey ? 70.0 : 32.0;
+                final keyWidthValue = isSpecialKey ? clampedKeyWidth * 1.8 : clampedKeyWidth;
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                  padding: EdgeInsets.symmetric(horizontal: keySpacing / 2),
                   child: _KawaiiKeyButton(
                     label: key,
-                    width: keyWidth,
+                    width: keyWidthValue,
                     backgroundColor: _getKeyColor(key),
                     textColor: _getKeyTextColor(key),
                     onTap: () {
@@ -157,6 +170,10 @@ class _KawaiiKeyButtonState extends State<_KawaiiKeyButton>
 
   @override
   Widget build(BuildContext context) {
+    final isSpecialKey = widget.label == 'ENTER' || widget.label == 'DELETE';
+    final fontSize = isSpecialKey ? 18.0 : (widget.width > 28 ? 16.0 : 14.0);
+    final iconSize = widget.width > 28 ? 20.0 : 18.0;
+
     return GestureDetector(
       onTapDown: _handleTapDown,
       onTapUp: _handleTapUp,
@@ -168,17 +185,17 @@ class _KawaiiKeyButtonState extends State<_KawaiiKeyButton>
             scale: _scaleAnimation.value,
             child: Container(
               width: widget.width,
-              height: 56,
+              height: 48,
               decoration: BoxDecoration(
                 color: widget.backgroundColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 boxShadow: _isPressed
                     ? []
                     : [
                   BoxShadow(
                     color: AppColors.shadow,
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
@@ -187,12 +204,12 @@ class _KawaiiKeyButtonState extends State<_KawaiiKeyButton>
                     ? Icon(
                   Icons.backspace_outlined,
                   color: widget.textColor,
-                  size: 22,
+                  size: iconSize,
                 )
                     : Text(
                   widget.label == 'ENTER' ? '✓' : widget.label,
                   style: TextStyle(
-                    fontSize: widget.label == 'ENTER' ? 24 : 18,
+                    fontSize: widget.label == 'ENTER' ? fontSize + 4 : fontSize,
                     fontWeight: FontWeight.w800,
                     color: widget.textColor,
                   ),
