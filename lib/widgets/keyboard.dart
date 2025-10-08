@@ -56,36 +56,28 @@ class GameKeyboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Вычисляем размер клавиши на основе ширины экрана
-    final horizontalPadding = 8.0;
-    final keySpacing = 2.0;
-    // Для первого ряда (12 клавиш)
-    final availableWidth = screenWidth - (horizontalPadding * 2);
-    final totalSpacing = keySpacing * 11; // 11 промежутков между 12 клавишами
-    final keyWidth = (availableWidth - totalSpacing) / 12;
-    final clampedKeyWidth = keyWidth.clamp(24.0, 32.0);
+    // Используем LayoutBuilder, чтобы подстраиваться под доступную ширину.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        // Отступы слева/справа и промежутки между клавишами
+        const horizontalPadding = 8.0;
+        const keyGap = 6.0;
+        final usableWidth = totalWidth - horizontalPadding * 2;
 
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: horizontalPadding),
-      child: Column(
-        children: _keyboardLayout.asMap().entries.map((entry) {
-          final rowIndex = entry.key;
-          final row = entry.value;
+        Widget buildRow(List<String> row, {bool isThird = false}) {
+          // Для третьего ряда делаем ENTER и DELETE шире (flex = 2).
+          return Row(
+            children: row.map((key) {
+              final bool isSpecial = key == 'ENTER' || key == 'DELETE';
+              final int flex = isThird && isSpecial ? 2 : 1;
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: row.map((key) {
-                final isSpecialKey = key == 'ENTER' || key == 'DELETE';
-                final keyWidthValue = isSpecialKey ? clampedKeyWidth * 1.8 : clampedKeyWidth;
-
-                return Padding(
-                  padding: EdgeInsets.symmetric(horizontal: keySpacing / 2),
-                  child: _KawaiiKeyButton(
+              return Expanded(
+                flex: flex,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: keyGap / 2, vertical: 4),
+                  child: _KeyButton(
                     label: key,
-                    width: keyWidthValue,
                     backgroundColor: _getKeyColor(key),
                     textColor: _getKeyTextColor(key),
                     onTap: () {
@@ -98,126 +90,97 @@ class GameKeyboard extends StatelessWidget {
                       }
                     },
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              );
+            }).toList(),
           );
-        }).toList(),
-      ),
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildRow(_keyboardLayout[0]),
+              buildRow(_keyboardLayout[1]),
+              // третий ряд — ENTER и DELETE шире
+              buildRow(_keyboardLayout[2], isThird: true),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-class _KawaiiKeyButton extends StatefulWidget {
+class _KeyButton extends StatefulWidget {
   final String label;
-  final double width;
   final Color backgroundColor;
   final Color textColor;
   final VoidCallback onTap;
 
-  const _KawaiiKeyButton({
+  const _KeyButton({
     Key? key,
     required this.label,
-    required this.width,
     required this.backgroundColor,
     required this.textColor,
     required this.onTap,
   }) : super(key: key);
 
   @override
-  State<_KawaiiKeyButton> createState() => _KawaiiKeyButtonState();
+  State<_KeyButton> createState() => _KeyButtonState();
 }
 
-class _KawaiiKeyButtonState extends State<_KawaiiKeyButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  bool _isPressed = false;
+class _KeyButtonState extends State<_KeyButton> {
+  bool _pressed = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 100),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _handleTapDown(TapDownDetails details) {
-    setState(() => _isPressed = true);
-    _controller.forward();
-  }
-
-  void _handleTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
-    _controller.reverse();
+  void _onTapDown(TapDownDetails _) => setState(() => _pressed = true);
+  void _onTapUp(TapUpDetails _) {
+    setState(() => _pressed = false);
     widget.onTap();
   }
 
-  void _handleTapCancel() {
-    setState(() => _isPressed = false);
-    _controller.reverse();
-  }
+  void _onTapCancel() => setState(() => _pressed = false);
 
   @override
   Widget build(BuildContext context) {
-    final isSpecialKey = widget.label == 'ENTER' || widget.label == 'DELETE';
-    final fontSize = isSpecialKey ? 18.0 : (widget.width > 28 ? 16.0 : 14.0);
-    final iconSize = widget.width > 28 ? 20.0 : 18.0;
+    final isIcon = widget.label == 'DELETE';
+    final display = widget.label == 'ENTER' ? '✓' : widget.label;
 
     return GestureDetector(
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
-      child: AnimatedBuilder(
-        animation: _scaleAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Container(
-              width: widget.width,
-              height: 48,
-              decoration: BoxDecoration(
-                color: widget.backgroundColor,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: _isPressed
-                    ? []
-                    : [
-                  BoxShadow(
-                    color: AppColors.shadow,
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: widget.label == 'DELETE'
-                    ? Icon(
-                  Icons.backspace_outlined,
-                  color: widget.textColor,
-                  size: iconSize,
-                )
-                    : Text(
-                  widget.label == 'ENTER' ? '✓' : widget.label,
-                  style: TextStyle(
-                    fontSize: widget.label == 'ENTER' ? fontSize + 4 : fontSize,
-                    fontWeight: FontWeight.w800,
-                    color: widget.textColor,
-                  ),
-                ),
-              ),
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 90),
+        transform: Matrix4.identity()..scale(_pressed ? 0.97 : 1.0),
+        height: 46,
+        decoration: BoxDecoration(
+          color: widget.backgroundColor,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: _pressed
+              ? null
+              : [
+            BoxShadow(
+              color: AppColors.shadow,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
-          );
-        },
+          ],
+        ),
+        child: Center(
+          child: isIcon
+              ? Icon(Icons.backspace_outlined, color: widget.textColor, size: 20)
+              : Text(
+            display,
+            style: TextStyle(
+              fontSize: widget.label == 'ENTER' ? 16 : 14,
+              fontWeight: FontWeight.w800,
+              color: widget.textColor,
+            ),
+          ),
+        ),
       ),
     );
   }

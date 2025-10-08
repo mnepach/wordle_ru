@@ -1,163 +1,146 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'dart:math';
+import 'dart:io';
 
-// Сервис для получения реальных русских слов
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
 class WordsApiService {
-  // Статический кэш слов для оффлайн работы
-  static List<String> _cachedWords = [];
-  static bool _isInitialized = false;
+  static bool _initialized = false;
+  static List<String> _answers = []; // Список слов для загадывания (5 букв, именительный падеж ед.ч.)
+  static Set<String> _allowed = {}; // Разрешённые слова для ввода (то же, что и answers для строгой фильтрации)
 
-  // Инициализация - загрузка слов из русского словаря
+  static const _wordleRussianRaw =
+      'https://raw.githubusercontent.com/mediahope/Wordle-Russian-Dictionary/main/Russian.txt';
+
   static Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_initialized) return;
 
     try {
-      // Используем API для получения русских слов из 5 букв
-      final response = await http.get(
-        Uri.parse('https://raw.githubusercontent.com/danakt/russian-words/master/russian.txt'),
-      ).timeout(const Duration(seconds: 5));
+      final prefs = await SharedPreferences.getInstance();
+      final cachedAnswers = prefs.getStringList('w_answers_v3');
+      final cachedAllowed = prefs.getStringList('w_allowed_v3');
 
-      if (response.statusCode == 200) {
-        final allWords = LineSplitter.split(response.body);
+      if (cachedAnswers != null && cachedAllowed != null && cachedAllowed.isNotEmpty) {
+        _allowed = cachedAllowed.map((w) => w.toUpperCase()).toSet();
+        _answers = cachedAnswers.map((w) => w.toUpperCase()).toList();
+        _initialized = true;
+        return;
+      }
 
-        // Фильтруем только слова из 5 букв, заглавными буквами
-        _cachedWords = allWords
-            .where((word) => word.length == 5 && RegExp(r'^[А-ЯЁа-яё]+$').hasMatch(word))
-            .map((word) => word.toUpperCase())
-            .toSet() // Убираем дубликаты
+      // Fallback на assets, если нет
+      try {
+        final answersAsset = await rootBundle.loadString('assets/wordlists/answers.txt');
+        final allowedAsset = await rootBundle.loadString('assets/wordlists/allowed.txt');
+
+        final answers = LineSplitter.split(answersAsset)
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .map((s) => s.toUpperCase())
+            .where((w) => _isValidWordleWord(w))
             .toList();
 
-        // Если получилось мало слов, добавляем резервные
-        if (_cachedWords.length < 100) {
-          _cachedWords.addAll(_fallbackWords);
-          _cachedWords = _cachedWords.toSet().toList();
+        final allowed = LineSplitter.split(allowedAsset)
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .map((s) => s.toUpperCase())
+            .where((w) => _isValidWordleWord(w))
+            .toSet();
+
+        if (allowed.isNotEmpty) {
+          _allowed = allowed;
+          _answers = answers.isNotEmpty ? answers : allowed.toList();
+          _cacheWords();
+          _initialized = true;
+          return;
         }
-      } else {
-        _cachedWords = List.from(_fallbackWords);
+      } catch (_) {}
+
+      // Загрузка из API
+      final loaded = await _tryLoadFromWordleApi();
+      if (loaded && _allowed.isNotEmpty) {
+        _answers = _allowed.toList()..sort();
+        _cacheWords();
       }
-    } catch (e) {
-      print('Error loading words from API: $e');
-      _cachedWords = List.from(_fallbackWords);
+    } catch (_) {} finally {
+      _initialized = true;
     }
-
-    _isInitialized = true;
   }
 
-  // Получить случайное слово для игры
-  static String getRandomWord() {
-    if (_cachedWords.isEmpty) {
-      return _fallbackWords[Random().nextInt(_fallbackWords.length)];
+  // Фильтр для строгих 5-буквенных слов: именительный ед.ч., без мягких/твёрдых знаков, Ё
+  static bool _isValidWordleWord(String word) {
+    if (!RegExp(r'^[А-Я]{5}$').hasMatch(word)) return false;
+    if (word.contains('Ъ') || word.contains('Ь') || word.contains('Ё')) return false;
+    // Дополнительная фильтрация: исключаем известные множественные/склонённые формы (примерно)
+    final excludedPatterns = [
+      RegExp(r'^(ЩУК|ДОМЫ|РЫС|БЫТ|ИДУТ|СТОЯ|ЛЕЖИ|БЕЖИ|ПЛАЧ|КРИЧ|ШЕПТ|ЗОВУ|ДЫШИ|СПЯТ|ВОЮ|МИРУ|ЛЮБВ|СМЕХ|ГРУС|РАДО|БОЛЬ|СТРА|НАДЕ|МЕЧТ|ДРУГ|ВРАГ|ДОМЫ|ЩУК|РЫСЬ|ЛЕТА|ЗИМЫ|ВЕСН|ОСЕН|НОЧИ|ДНЯМ|ЧАСЫ|МИНУ|СЕКУ|МЕСЯ|ГОДА|РУКА|НОГА|ГОЛВ|ГЛАЗ|УШИ|НОСА|РОТА|ЗУБЫ|ЯЗЫ|МОЗГ|СЕРД|ЛЕГК|КРОВ|КОСТ|КожА|ВОЛО|ПЛОТЬ|ЖИЗН|СМЕР|СОНЫ|СНАМ|МЕЧТ|СОНЫ)$', caseSensitive: false)
+    ];
+    for (final pattern in excludedPatterns) {
+      if (pattern.hasMatch(word)) return false;
     }
-    return _cachedWords[Random().nextInt(_cachedWords.length)];
+    return true;
   }
 
-  // Получить слово дня
-  static String getWordOfTheDay() {
-    if (_cachedWords.isEmpty) {
-      final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
-      return _fallbackWords[daysSinceEpoch % _fallbackWords.length];
-    }
-
-    final daysSinceEpoch = DateTime.now().difference(DateTime(2024, 1, 1)).inDays;
-    return _cachedWords[daysSinceEpoch % _cachedWords.length];
+  static Future<bool> _tryLoadFromWordleApi() async {
+    try {
+      final resp = await http.get(Uri.parse(_wordleRussianRaw)).timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200) {
+        final lines = LineSplitter.split(resp.body);
+        final Set<String> words = {};
+        for (var raw in lines) {
+          final w = raw.trim();
+          if (w.isEmpty) continue;
+          final up = w.toUpperCase();
+          if (_isValidWordleWord(up)) {
+            words.add(up);
+          }
+        }
+        if (words.isNotEmpty) {
+          _allowed = words;
+          return true;
+        }
+      }
+    } on TimeoutException catch (_) {
+    } on SocketException catch (_) {
+    } catch (_) {}
+    return false;
   }
 
-  // Проверить, существует ли слово
+  static void _cacheWords() {
+    final prefs = SharedPreferences.getInstance();
+    prefs.then((prefs) {
+      prefs.setStringList('w_allowed_v3', _allowed.toList());
+      prefs.setStringList('w_answers_v3', _answers);
+    });
+  }
+
   static bool isValidWord(String word) {
-    if (_cachedWords.isEmpty) {
-      return _fallbackWords.contains(word.toUpperCase());
-    }
-    return _cachedWords.contains(word.toUpperCase()) ||
-        _fallbackWords.contains(word.toUpperCase());
+    if (word.length != 5) return false; // Строго 5 букв
+    final up = word.toUpperCase();
+    return _allowed.contains(up);
   }
 
-  // Резервные слова на случай проблем с API (реальные русские слова из 5 букв)
-  static final List<String> _fallbackWords = [
-    'АРБУЗ', 'БЕЛКА', 'ВЕДРО', 'ГОРОД', 'ДОСКА',
-    'ЖИЗНЬ', 'ЗАМОК', 'КНИГА', 'ЛИНИЯ', 'МЕСТО',
-    'НАРОД', 'ОБРАЗ', 'ПРАВО', 'СЛОВО', 'ТОЧКА',
-    'ФРАЗА', 'ШКОЛА', 'ОТВЕТ', 'ВРЕМЯ', 'РЫНОК',
-    'СТЕНА', 'РУЧКА', 'ОКЕАН', 'ПАЛКА', 'МОЛОТ',
-    'КИСТЬ', 'БАНКА', 'ЛОДКА', 'ПЕСОК', 'ВЕТЕР',
-    'ГРОЗА', 'ЗАВОД', 'КАРТА', 'МЕТОД', 'НОМЕР',
-    'ОЗЕРО', 'ПЕСНЯ', 'РАМКА', 'СУМКА', 'ТАНЕЦ',
-    'БАГАЖ', 'БАЛЕТ', 'БЕРЕГ', 'БИЛЕТ', 'БЛЮДО',
-    'БОКАЛ', 'ВЕСНА', 'ВИЗИТ', 'ВОЙНА', 'ВЫБОР',
-    'ВЫЗОВ', 'ВЫХОД', 'ГЕРОЙ', 'ГЛАВА', 'ГОСТЬ',
-    'ГРУППА', 'ДЕВИЗ', 'ДЕКОР', 'ДИВАН', 'ДОМИК',
-    'ДОРОГА', 'ДОЧКА', 'ДРАМА', 'ДРОВА', 'ЗАБОР',
-    'ЗАВЕТ', 'ЗАГАР', 'ЗАЛИВ', 'ЗАПАХ', 'ЗАРЯД',
-    'ЗВЕНО', 'ЗЕМЛЯ', 'ЗНАТЬ', 'ИДЕАЛ', 'ИКОНА',
-    'ИМИДЖ', 'КАЗАК', 'КАЛАЧ', 'КАНАЛ', 'КАССА',
-    'КАТЕР', 'КНЯЗЬ', 'КОЛЕСО', 'КОФЕ', 'КРАЙ',
-    'КРЕСТ', 'КРОВЬ', 'КРУГ', 'КУПЕЦ', 'КУРС',
-    'КУСОК', 'ЛАМПА', 'ЛЕВЫЙ', 'ЛЕНТА', 'ЛИДЕР',
-    'ЛИСТ', 'ЛОГИК', 'ЛОЖКА', 'МАСЛО', 'МАТЧ',
-    'МЕДАЛЬ', 'МЕСЯЦ', 'МЕТАЛЛ', 'МЕТКА', 'МЕЧТА',
-    'МНОГО', 'МОДЕЛЬ', 'МОЛОД', 'МОНАХ', 'МОРОЗ',
-    'МОТИВ', 'НАВЫК', 'НАРЯД', 'НЕБО', 'НИТКА',
-    'ОБИДА', 'ОБЛИК', 'ОБРЯД', 'ОГОНЬ', 'ОПЕРА',
-    'ОРДЕН', 'ОСНОВ', 'ОТДЕЛ', 'ОТЗЫВ', 'ОТРЯД',
-    'ОЧЕРК', 'ПАКЕТ', 'ПАПКА', 'ПАРАД', 'ПАРК',
-    'ПАРТИЯ', 'ПАСХА', 'ПАТРОН', 'ПЕНАЛ', 'ПЕРЕЦ',
-    'ПЕЧАТЬ', 'ПИРАТ', 'ПЛАТА', 'ПЛЕМЯ', 'ПЛИТА',
-    'ПОБЕД', 'ПОВОД', 'ПОЕЗД', 'ПОКАЗ', 'ПОЛЕТ',
-    'ПОЛКА', 'ПОЛЮС', 'ПОРТР', 'ПОСОЛ', 'ПОТОК',
-    'ПОЧТА', 'ПРЕСС', 'ПРИЕМ', 'ПРИНЦ', 'ПТИЦА',
-    'ПУТЬ', 'ПУШКА', 'ПЬЕСА', 'ПЯТНО', 'РАБОТ',
-    'РАДИО', 'РАЙОН', 'РАНГ', 'РЕЧКА', 'РОМАН',
-    'РУБЕЖ', 'РУБЛЬ', 'РУКАВ', 'РУЛЕТ', 'РЫБАК',
-    'РЯДОМ', 'САХАР', 'СВЕЧА', 'СВЯЗЬ', 'СЕВЕР',
-    'СЕМЬЯ', 'СЕСТР', 'СЕТЬ', 'СИЛА', 'СИСТЕ',
-    'СКАЗК', 'СКАЛА', 'СКЛАД', 'СЛАВА', 'СЛЕД',
-    'СЛУЖБ', 'СМЫСЛ', 'СНЕГ', 'СОБОР', 'СОВЕТ',
-    'СОЮЗ', 'СПИНА', 'СПОРТ', 'СРЕДА', 'СТАДО',
-    'СТАТЬ', 'СТИЛЬ', 'СТРАХ', 'СТУДЕ', 'СТУЛЬ',
-    'СЦЕНА', 'ТАБАК', 'ТАЙНА', 'ТАКСИ', 'ТАНК',
-    'ТАРИФ', 'ТЕАТР', 'ТЕЗИС', 'ТЕКСТ', 'ТЕЛЕГ',
-    'ТЕЛЕФ', 'ТЕЛО', 'ТЕМА', 'ТЕОРИ', 'ТЕХНИ',
-    'ТОВАР', 'ТОЛПА', 'ТОМИК', 'ТРАВМ', 'ТРАНС',
-    'ТРАТА', 'ТРЕТЬ', 'ТРУБА', 'ТРУД', 'ТРУП',
-    'ТУМАН', 'ТЮРЬМ', 'УДАЧА', 'УЖИН', 'УЛИЦА',
-    'УРОВН', 'УСЛОВ', 'УСПЕХ', 'УСТАВ', 'УЧАСТ',
-    'УЧЕНИ', 'ФАБРИ', 'ФАКТО', 'ФАМИЛ', 'ФЕРМА',
-    'ФИГУР', 'ФИЗИК', 'ФИЛЬМ', 'ФИНАЛ', 'ФИРМА',
-    'ФЛАГ', 'ФЛОТА', 'ФОНАР', 'ФОРМА', 'ФОТОГ',
-    'ФРАНЦ', 'ФРОНТ', 'ФРУКТ', 'ХОЛОД', 'ХРАМ',
-    'ЦЕЛЬ', 'ЦЕНТР', 'ЦЕПЬ', 'ЦИКЛ', 'ЦИРК',
-    'ЧАСОВ', 'ЧАСТЬ', 'ЧАШКА', 'ЧЕСТЬ', 'ЧИСЛО',
-    'ЧИТАТ', 'ЧЛЕН', 'ЧУВСТ', 'ЧУЖОЙ', 'ШАНС',
-    'ШАПКА', 'ШАХТА', 'ШОССЕ', 'ШПАГА', 'ШТАБ',
-    'ШТАМП', 'ШТАТ', 'ШТОРА', 'ШТРАФ', 'ШУТКА',
-    'ЩЕНОК', 'ЭКРАН', 'ЭПОХА', 'ЭТАЖ', 'ЮБКА',
-    'ЮЖНЫЙ', 'ЮМОР', 'ЮНОША', 'ЯГОДА', 'ЯЗЫК',
-    'ЯЙЦО', 'ЯРУС', 'ЯЩИК', 'АБЗАЦ', 'АКТИВ',
-    'АЛЬБО', 'АНАЛИЗ', 'АРХИВ', 'АТАКА', 'БАНЯ',
-    'БАССЕ', 'БИТВА', 'БРОВЬ', 'БРЮКИ', 'БУМАГ',
-    'ВАГОН', 'ВАЖНО', 'ВАННА', 'ВДОВА', 'ВЕЗДЕ',
-    'ВЕРБА', 'ВЕРНО', 'ВЕРСТ', 'ВЕРШИН', 'ВЕЧЕР',
-    'ВЕЩЬ', 'ВЗГЛЯ', 'ВЗЛЕТ', 'ВЗРЫВ', 'ВИДЕО',
-    'ВИЛКА', 'ВИШНЯ', 'ВКЛАДЕ', 'ВКУС', 'ВЛАГА',
-    'ВЛАСТ', 'ВМЕСТЕ', 'ВНИЗУ', 'ВНИЗ', 'ВНУК',
-    'ВОДКА', 'ВОЗДУ', 'ВОЗЛЕ', 'ВОЙНА', 'ВОЛНА',
-    'ВОЛОС', 'ВОРОН', 'ВОРОТА', 'ВОРОТ', 'ВРАГ',
-    'ВРАЖД', 'ВРАТА', 'ВРЕМЯ', 'ВЧЕРА', 'ВЪЕЗД',
-    'ВЫБРА', 'ВЫГОД', 'ВЫЕЗД', 'ВЫЗВА', 'ВЫПОЛ',
-    'ВЫРВА', 'ВЫРАБ', 'ВЫРАЗ', 'ВЫСЛА', 'ВЫСОК',
-    'ВЫСТУ', 'ВЫХОД', 'ВЫЧЕТ', 'ВЯЗКА', 'ГАВАНЬ',
-    'ГАЗЕТ', 'ГАРАЖ', 'ГЕНЕР', 'ГЕНИЙ', 'ГИБЕЛ',
-    'ГИМН', 'ГИТАР', 'ГЛАДК', 'ГЛИНА', 'ГЛУБО',
-    'ГНАТЬ', 'ГНЕЗД', 'ГНИТЬ', 'ГОВОР', 'ГОЛЛА',
-    'ГОЛОВ', 'ГОЛОД', 'ГОЛОС', 'ГОЛУБ', 'ГОЛЫЙ',
-    'ГОНКА', 'ГОРА', 'ГОРАЗ', 'ГОРЕ', 'ГОРЛО',
-    'ГОРН', 'ГОРСТ', 'ГОРЯЧ', 'ГОСТЕ', 'ГОСУД',
-    'ГОТОВ', 'ГРАБИ', 'ГРАММ', 'ГРАНД', 'ГРАНИ',
-    'ГРАФА', 'ГРАФИК', 'ГРАФИН', 'ГРЕМЕ', 'ГРЕХ',
-    'ГРЕЧА', 'ГРИВА', 'ГРИМ', 'ГРИПП', 'ГРОБ',
-    'ГРОМ', 'ГРОМК', 'ГРОШ', 'ГРУБО', 'ГРУДН',
-    'ГРУДЬ', 'ГРУЗ', 'ГРУНТ', 'ГРУСТ', 'ГРУША',
-    'ГРЯЗН', 'ГРЯЗЬ', 'ГУБА', 'ГУБЕР', 'ГУБИТ',
-    'ГУБКА', 'ГУДОК', 'ГУЛЯН', 'ГУСТО', 'ГУСЬ'
-  ];
+  static String getRandomWord() {
+    if (_answers.isEmpty) return 'СЛОВО';
+    final r = Random().nextInt(_answers.length);
+    return _answers[r];
+  }
+
+  static String getWordOfTheDay({DateTime? forDate}) {
+    if (_answers.isEmpty) return 'ИГРА';
+    final epoch = DateTime(2024, 1, 1);
+    final date = forDate ?? DateTime.now();
+    final days = date.difference(epoch).inDays;
+    final idx = days % _answers.length;
+    return _answers[idx];
+  }
+
+  static Future<void> forceRefresh() async {
+    _initialized = false;
+    _answers = [];
+    _allowed = {};
+    await initialize();
+  }
 }

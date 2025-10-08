@@ -251,7 +251,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   elevation: 5,
                 ),
                 child: const Text(
-                  'Новая игра (｡♥‿♥｡)',
+                  'Новая игра',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -328,7 +328,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       Expanded(
                         child: Center(
                           child: SingleChildScrollView(
-                            child: GameBoard(rows: _gameService.rows),
+                            child: GameBoard(
+                              rows: _gameService.rows,
+                              key: ValueKey(_gameService),
+                            ),
                           ),
                         ),
                       ),
@@ -479,7 +482,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               _HelpExample(
                 letter: 'О',
                 color: AppColors.present,
-                description: 'Буква есть, но не здесь (・_・ヾ',
+                description: 'Буква есть, но не здесь',
               ),
               const SizedBox(height: 12),
               _HelpExample(

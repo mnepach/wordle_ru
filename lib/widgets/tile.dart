@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/word_data.dart';
 import '../constants/colors.dart';
@@ -5,220 +6,128 @@ import '../constants/colors.dart';
 class LetterTile extends StatefulWidget {
   final Letter letter;
   final int animationDelay;
+  final bool highlight;
 
   const LetterTile({
     Key? key,
     required this.letter,
     this.animationDelay = 0,
+    this.highlight = false,
   }) : super(key: key);
 
   @override
   State<LetterTile> createState() => _LetterTileState();
 }
 
-class _LetterTileState extends State<LetterTile> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _flipAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _bounceAnimation;
-
-  LetterStatus _previousStatus = LetterStatus.empty;
-  bool _isAnimating = false;
+class _LetterTileState extends State<LetterTile>
+    with SingleTickerProviderStateMixin {
+  double _flip = 0.0;
+  bool _pop = false;
+  late LetterStatus _prevStatus;
+  late String _prevCharacter;
 
   @override
   void initState() {
     super.initState();
-    _previousStatus = widget.letter.status;
-
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-
-    // Анимация переворота
-    _flipAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    // Анимация масштаба при вводе
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-      ),
-    );
-
-    // Анимация подпрыгивания
-    _bounceAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.elasticOut,
-      ),
-    );
+    _prevStatus = widget.letter.status;
+    _prevCharacter = widget.letter.character;
   }
 
   @override
-  void didUpdateWidget(LetterTile oldWidget) {
+  void didUpdateWidget(covariant LetterTile oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Запуск анимации только при смене статуса с notChecked на другой
-    if (_previousStatus == LetterStatus.notChecked &&
+    if (oldWidget.letter.character != widget.letter.character) {
+      // Сбрасываем анимации при изменении символа
+      _flip = 0.0;
+      _pop = false;
+      if (widget.letter.character.isNotEmpty) {
+        setState(() => _pop = true);
+        Future.delayed(const Duration(milliseconds: 140), () {
+          if (mounted) setState(() => _pop = false);
+        });
+      }
+    }
+
+    if (_prevStatus == LetterStatus.notChecked &&
         widget.letter.status != LetterStatus.notChecked &&
-        widget.letter.status != LetterStatus.empty &&
-        !_isAnimating) {
-      _isAnimating = true;
-      _previousStatus = widget.letter.status;
-
+        widget.letter.status != LetterStatus.empty) {
       Future.delayed(Duration(milliseconds: widget.animationDelay), () {
-        if (mounted && _isAnimating) {
-          _controller.forward(from: 0).then((_) {
-            if (mounted) {
-              setState(() {
-                _isAnimating = false;
-              });
-            }
-          });
-        }
+        if (!mounted) return;
+        setState(() => _flip = 1.0);
       });
     }
-    // Анимация при добавлении буквы
-    else if (oldWidget.letter.character.isEmpty &&
-        widget.letter.character.isNotEmpty &&
-        !_isAnimating) {
-      _previousStatus = widget.letter.status;
-      _controller.forward(from: 0).then((_) {
-        if (mounted) {
-          _controller.reverse();
-        }
-      });
-    }
-    // Просто обновляем статус без анимации
-    else if (oldWidget.letter.status != widget.letter.status) {
-      _previousStatus = widget.letter.status;
-    }
+
+    _prevStatus = widget.letter.status;
+    _prevCharacter = widget.letter.character;
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Color _getBackgroundColor() {
-    switch (widget.letter.status) {
+  Color _getColor(LetterStatus status) {
+    switch (status) {
       case LetterStatus.correct:
         return AppColors.correct;
       case LetterStatus.present:
         return AppColors.present;
       case LetterStatus.absent:
         return AppColors.absent;
-      case LetterStatus.empty:
-        return AppColors.empty;
-      case LetterStatus.notChecked:
+      default:
         return AppColors.empty;
     }
-  }
-
-  Color _getBorderColor() {
-    if (widget.letter.character.isNotEmpty &&
-        widget.letter.status == LetterStatus.notChecked) {
-      return AppColors.borderFilled;
-    }
-    if (widget.letter.status == LetterStatus.empty) {
-      return AppColors.border;
-    }
-    return _getBackgroundColor();
-  }
-
-  Color _getTextColor() {
-    if (widget.letter.status == LetterStatus.empty ||
-        widget.letter.status == LetterStatus.notChecked) {
-      return AppColors.text;
-    }
-    return Colors.white;
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final angle = _flipAnimation.value * 3.14159;
-        final transform = Matrix4.identity()
-          ..setEntry(3, 2, 0.001)
-          ..rotateX(angle);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final size = (screenWidth * 0.88 - 24) / 5;
 
-        final showFront = angle < 3.14159 / 2;
-
-        // Определяем, показывать ли старый или новый цвет
-        final displayStatus = showFront ? LetterStatus.notChecked : widget.letter.status;
-        final backgroundColor = showFront
-            ? AppColors.empty
-            : _getBackgroundColor();
-        final borderColor = showFront
-            ? _getBorderColor()
-            : _getBackgroundColor();
-        final textColor = showFront || widget.letter.status == LetterStatus.notChecked
-            ? AppColors.text
-            : Colors.white;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: _flip),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOutCubic,
+      builder: (context, value, _) {
+        final angle = value * math.pi;
+        final showFront = angle < math.pi / 2;
+        final color = showFront ? AppColors.empty : _getColor(widget.letter.status);
 
         return Transform(
-          transform: transform,
           alignment: Alignment.center,
-          child: Container(
-            width: 62,
-            height: 62,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.002)
+            ..rotateX(angle),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: size,
+            height: size,
             decoration: BoxDecoration(
-              color: backgroundColor,
+              color: color,
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: borderColor,
-                width: 3,
+                color: widget.letter.character.isEmpty
+                    ? AppColors.border
+                    : color.withOpacity(0.8),
+                width: 2.5,
               ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.shadow,
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
-            child: Stack(
-              children: [
-                // Основная буква
-                Center(
-                  child: Transform.scale(
-                    scale: widget.letter.status == LetterStatus.notChecked
-                        ? _scaleAnimation.value
-                        : 1.0,
-                    child: Transform(
-                      transform: Matrix4.rotationX(showFront ? 0 : 3.14159),
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.letter.character,
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          color: textColor,
-                        ),
-                      ),
+            child: Center(
+              child: AnimatedScale(
+                scale: _pop ? 1.12 : 1.0,
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                child: Transform(
+                  transform: Matrix4.rotationX(showFront ? 0 : math.pi),
+                  alignment: Alignment.center,
+                  child: Text(
+                    widget.letter.character,
+                    style: TextStyle(
+                      fontSize: size * 0.45,
+                      fontWeight: FontWeight.bold,
+                      color: showFront
+                          ? AppColors.text
+                          : Colors.white,
                     ),
                   ),
                 ),
-                // Блестки при правильной букве (каомодзи)
-                if (widget.letter.status == LetterStatus.correct && !showFront)
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Opacity(
-                      opacity: _bounceAnimation.value,
-                      child: const Text(
-                        '✧',
-                        style: TextStyle(fontSize: 16, color: Colors.white),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         );
