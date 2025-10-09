@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../constants/colors.dart';
 
-// Милый прыгающий персонаж на фоне
 class FloatingCharacter extends StatefulWidget {
   final Alignment startPosition;
   final double delay;
@@ -28,7 +27,6 @@ class _FloatingCharacterState extends State<FloatingCharacter>
   void initState() {
     super.initState();
 
-    // Анимация прыжка
     _jumpController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -47,7 +45,6 @@ class _FloatingCharacterState extends State<FloatingCharacter>
       ),
     ]).animate(_jumpController);
 
-    // Анимация перемещения
     _moveController = AnimationController(
       duration: const Duration(seconds: 5),
       vsync: this,
@@ -57,7 +54,6 @@ class _FloatingCharacterState extends State<FloatingCharacter>
       CurvedAnimation(parent: _moveController, curve: Curves.linear),
     );
 
-    // Запуск с задержкой
     Future.delayed(Duration(milliseconds: (widget.delay * 1000).toInt()), () {
       if (mounted) {
         _startAnimation();
@@ -85,7 +81,6 @@ class _FloatingCharacterState extends State<FloatingCharacter>
     return AnimatedBuilder(
       animation: Listenable.merge([_jumpController, _moveController]),
       builder: (context, child) {
-        // Вычисляем позицию на основе стартовой позиции
         double x;
         double y;
 
@@ -114,7 +109,6 @@ class _FloatingCharacterState extends State<FloatingCharacter>
   }
 }
 
-// Милый персонаж (котик)
 class _KawaiiCharacter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -149,7 +143,7 @@ class _KawaiiCharacter extends StatelessWidget {
               ),
               child: Stack(
                 children: [
-                  // Глазки
+                  // Глаза
                   Positioned(
                     left: 10,
                     top: 12,
@@ -160,7 +154,7 @@ class _KawaiiCharacter extends StatelessWidget {
                     top: 12,
                     child: _Eye(),
                   ),
-                  // Носик
+                  // Нос
                   Positioned(
                     left: 17,
                     top: 22,
@@ -173,7 +167,6 @@ class _KawaiiCharacter extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Улыбка
                   Positioned(
                     left: 12,
                     top: 24,
@@ -186,7 +179,6 @@ class _KawaiiCharacter extends StatelessWidget {
               ),
             ),
           ),
-          // Левое ушко
           Positioned(
             left: 15,
             bottom: 70,
@@ -195,7 +187,6 @@ class _KawaiiCharacter extends StatelessWidget {
               painter: _EarPainter(),
             ),
           ),
-          // Правое ушко
           Positioned(
             right: 15,
             bottom: 70,
@@ -208,7 +199,6 @@ class _KawaiiCharacter extends StatelessWidget {
               ),
             ),
           ),
-          // Хвостик
           Positioned(
             right: 5,
             bottom: 20,
@@ -221,7 +211,6 @@ class _KawaiiCharacter extends StatelessWidget {
               ),
             ),
           ),
-          // Лапки
           Positioned(
             left: 20,
             bottom: 5,
@@ -238,7 +227,6 @@ class _KawaiiCharacter extends StatelessWidget {
   }
 }
 
-// Глазик
 class _Eye extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -253,7 +241,6 @@ class _Eye extends StatelessWidget {
   }
 }
 
-// Лапка
 class _Paw extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -268,7 +255,6 @@ class _Paw extends StatelessWidget {
   }
 }
 
-// Рисовальщик улыбки
 class _SmilePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -288,7 +274,6 @@ class _SmilePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Рисовальщик ушка
 class _EarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

@@ -9,8 +9,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class WordsApiService {
   static bool _initialized = false;
-  static List<String> _answers = []; // Список слов для загадывания (5 букв, именительный падеж ед.ч.)
-  static Set<String> _allowed = {}; // Разрешённые слова для ввода (то же, что и answers для строгой фильтрации)
+  static List<String> _answers = [
+    'БАГЕТ',
+    'КНИГА',
+    'ГАМАК',
+    'ОКЕАН',
+    'ЗЕМЛЯ',
+    'ЛИЛИЯ',
+    'УСПЕХ',
+    'ГОРОД',
+    'РЕЧКА',
+    'ТАЙНА',
+    'ДОЖДЬ',
+    'РАДИЙ',
+    'ТРАВА',
+    'ГРОЗА',
+    'АТЛАС',
+    'ПЕСНЯ',
+    'СКВЕР',
+    'ОСЕНЬ',
+    'ОАЗИС',
+    'ВЕНИК',
+    'ХОЛСТ',
+    'ФАКЕЛ'
+  ];
+  static Set<String> _allowed = {};
 
   static const _wordleRussianRaw =
       'https://raw.githubusercontent.com/mediahope/Wordle-Russian-Dictionary/main/Russian.txt';
@@ -20,28 +43,16 @@ class WordsApiService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cachedAnswers = prefs.getStringList('w_answers_v3');
       final cachedAllowed = prefs.getStringList('w_allowed_v3');
 
-      if (cachedAnswers != null && cachedAllowed != null && cachedAllowed.isNotEmpty) {
+      if (cachedAllowed != null && cachedAllowed.isNotEmpty) {
         _allowed = cachedAllowed.map((w) => w.toUpperCase()).toSet();
-        _answers = cachedAnswers.map((w) => w.toUpperCase()).toList();
         _initialized = true;
         return;
       }
 
-      // Fallback на assets, если нет
       try {
-        final answersAsset = await rootBundle.loadString('assets/wordlists/answers.txt');
         final allowedAsset = await rootBundle.loadString('assets/wordlists/allowed.txt');
-
-        final answers = LineSplitter.split(answersAsset)
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .map((s) => s.toUpperCase())
-            .where((w) => _isValidWordleWord(w))
-            .toList();
-
         final allowed = LineSplitter.split(allowedAsset)
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty)
@@ -51,17 +62,14 @@ class WordsApiService {
 
         if (allowed.isNotEmpty) {
           _allowed = allowed;
-          _answers = answers.isNotEmpty ? answers : allowed.toList();
           _cacheWords();
           _initialized = true;
           return;
         }
       } catch (_) {}
 
-      // Загрузка из API
       final loaded = await _tryLoadFromWordleApi();
       if (loaded && _allowed.isNotEmpty) {
-        _answers = _allowed.toList()..sort();
         _cacheWords();
       }
     } catch (_) {} finally {
@@ -69,17 +77,9 @@ class WordsApiService {
     }
   }
 
-  // Фильтр для строгих 5-буквенных слов: именительный ед.ч., без мягких/твёрдых знаков, Ё
   static bool _isValidWordleWord(String word) {
     if (!RegExp(r'^[А-Я]{5}$').hasMatch(word)) return false;
     if (word.contains('Ъ') || word.contains('Ь') || word.contains('Ё')) return false;
-    // Дополнительная фильтрация: исключаем известные множественные/склонённые формы (примерно)
-    final excludedPatterns = [
-      RegExp(r'^(ЩУК|ДОМЫ|РЫС|БЫТ|ИДУТ|СТОЯ|ЛЕЖИ|БЕЖИ|ПЛАЧ|КРИЧ|ШЕПТ|ЗОВУ|ДЫШИ|СПЯТ|ВОЮ|МИРУ|ЛЮБВ|СМЕХ|ГРУС|РАДО|БОЛЬ|СТРА|НАДЕ|МЕЧТ|ДРУГ|ВРАГ|ДОМЫ|ЩУК|РЫСЬ|ЛЕТА|ЗИМЫ|ВЕСН|ОСЕН|НОЧИ|ДНЯМ|ЧАСЫ|МИНУ|СЕКУ|МЕСЯ|ГОДА|РУКА|НОГА|ГОЛВ|ГЛАЗ|УШИ|НОСА|РОТА|ЗУБЫ|ЯЗЫ|МОЗГ|СЕРД|ЛЕГК|КРОВ|КОСТ|КожА|ВОЛО|ПЛОТЬ|ЖИЗН|СМЕР|СОНЫ|СНАМ|МЕЧТ|СОНЫ)$', caseSensitive: false)
-    ];
-    for (final pattern in excludedPatterns) {
-      if (pattern.hasMatch(word)) return false;
-    }
     return true;
   }
 
@@ -117,7 +117,7 @@ class WordsApiService {
   }
 
   static bool isValidWord(String word) {
-    if (word.length != 5) return false; // Строго 5 букв
+    if (word.length != 5) return false;
     final up = word.toUpperCase();
     return _allowed.contains(up);
   }
@@ -139,7 +139,6 @@ class WordsApiService {
 
   static Future<void> forceRefresh() async {
     _initialized = false;
-    _answers = [];
     _allowed = {};
     await initialize();
   }

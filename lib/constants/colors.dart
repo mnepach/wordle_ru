@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-// Kawaii цветовая палитра для игры Wordle
 class AppColors {
   // Пастельные цвета плиток
   static const Color correct = Color(0xFFB4E4B4);      // Мятно-зелёный
@@ -8,7 +7,7 @@ class AppColors {
   static const Color absent = Color(0xFFE5D4ED);       // Лавандовый
   static const Color empty = Color(0xFFFFFFFF);        // Белый
 
-  // Градиенты фона
+  // Градиенты
   static const Color gradientStart = Color(0xFFFFF0F5); // Светло-розовый
   static const Color gradientEnd = Color(0xFFE0F4FF);   // Светло-голубой
 
@@ -16,7 +15,7 @@ class AppColors {
   static const Color border = Color(0xFFFFB6D9);        // Розовая граница
   static const Color borderFilled = Color(0xFFB8A4E5);  // Фиолетовая граница
 
-  // Цвета клавиатуры
+  // Цвета клави
   static const Color keyboardDefault = Color(0xFFFFE4F0); // Розоватая клавиша
   static const Color keyboardText = Color(0xFF8B6A9E);    // Фиолетовый текст
 

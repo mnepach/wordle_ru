@@ -56,17 +56,14 @@ class GameKeyboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Используем LayoutBuilder, чтобы подстраиваться под доступную ширину.
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
-        // Отступы слева/справа и промежутки между клавишами
         const horizontalPadding = 8.0;
         const keyGap = 6.0;
         final usableWidth = totalWidth - horizontalPadding * 2;
 
         Widget buildRow(List<String> row, {bool isThird = false}) {
-          // Для третьего ряда делаем ENTER и DELETE шире (flex = 2).
           return Row(
             children: row.map((key) {
               final bool isSpecial = key == 'ENTER' || key == 'DELETE';
@@ -103,7 +100,6 @@ class GameKeyboard extends StatelessWidget {
             children: [
               buildRow(_keyboardLayout[0]),
               buildRow(_keyboardLayout[1]),
-              // третий ряд — ENTER и DELETE шире
               buildRow(_keyboardLayout[2], isThird: true),
             ],
           ),

@@ -1,4 +1,4 @@
-// Статус буквы в игре
+// Статусы
 enum LetterStatus {
   empty,    // Пустая клетка
   notChecked, // Введена, но еще не проверена
@@ -7,7 +7,6 @@ enum LetterStatus {
   absent,   // Буквы нет в слове
 }
 
-// Модель одной плитки с буквой
 class Letter {
   final String character;
   final LetterStatus status;
@@ -28,13 +27,11 @@ class Letter {
   }
 }
 
-// Модель одной строки (попытки)
 class WordRow {
   final List<Letter> letters;
 
   WordRow({required this.letters});
 
-  // Создать пустую строку из 5 букв
   factory WordRow.empty() {
     return WordRow(
       letters: List.generate(
@@ -44,12 +41,11 @@ class WordRow {
     );
   }
 
-  // Получить слово из строки
   String getWord() {
     return letters.map((l) => l.character).join();
   }
 
-  // Проверить, заполнена ли строка
+  // заполнена ли строка проверка
   bool isFilled() {
     return letters.every((letter) => letter.character.isNotEmpty);
   }

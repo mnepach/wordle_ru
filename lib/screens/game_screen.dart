@@ -38,7 +38,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Future<void> _initializeGame() async {
     await WordsApiService.initialize();
     setState(() {
-      _gameService = GameService(targetWord: WordsApiService.getWordOfTheDay());
+      _gameService = GameService(targetWord: WordsApiService.getRandomWord());
       _isLoading = false;
     });
   }
@@ -52,7 +52,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _startNewGame() {
     setState(() {
-      _gameService = GameService(targetWord: WordsApiService.getWordOfTheDay());
+      _gameService = GameService(targetWord: WordsApiService.getRandomWord());
     });
   }
 
@@ -159,13 +159,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Каомодзи
               Text(
                 _gameService.isWinner ? '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧' : '(╥﹏╥)',
                 style: const TextStyle(fontSize: 48),
               ),
               const SizedBox(height: 16),
-              // Заголовок
+
               Text(
                 _gameService.isWinner ? 'Победа!' : 'Игра окончена',
                 textAlign: TextAlign.center,
@@ -176,7 +175,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 20),
-              // Содержимое
               if (!_gameService.isWinner) ...[
                 const Text(
                   'Загаданное слово:',
@@ -235,7 +233,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
               ],
               const SizedBox(height: 30),
-              // Кнопка
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -310,21 +307,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
           child: Stack(
             children: [
-              // Анимированные персонажи на фоне
+
               const FloatingCharacter(startPosition: Alignment.bottomLeft),
               const FloatingCharacter(startPosition: Alignment.bottomRight, delay: 1.5),
               const FloatingCharacter(startPosition: Alignment.centerLeft, delay: 3.0),
 
-              // Основной контент
+
               SafeArea(
                 child: GestureDetector(
                   onTap: () => _focusNode.requestFocus(),
                   child: Column(
                     children: [
-                      // Kawaii хедер
                       _buildKawaiiHeader(),
                       const SizedBox(height: 10),
-                      // Игровое поле
                       Expanded(
                         child: Center(
                           child: SingleChildScrollView(
@@ -335,7 +330,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
-                      // Клавиатура
                       GameKeyboard(
                         onLetterTap: _onLetterPressed,
                         onDeleteTap: _onDeletePressed,
@@ -360,12 +354,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Кнопка помощи
+          // помощь
           _KawaiiIconButton(
             icon: Icons.help_outline_rounded,
             onPressed: _showHelpDialog,
           ),
-          // Логотип с анимацией и иероглифами
+          // лого
           AnimatedBuilder(
             animation: _headerAnimationController,
             builder: (context, child) {
@@ -397,7 +391,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-                // Kawaii иероглифы в углу
                 Positioned(
                   top: -8,
                   right: -30,
@@ -430,7 +423,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
-          // Кнопка новой игры
+          // новая игра
           _KawaiiIconButton(
             icon: Icons.refresh_rounded,
             onPressed: _showNewGameConfirmation,
@@ -555,7 +548,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 }
 
-// Kawaii кнопка с иконкой
 class _KawaiiIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
@@ -588,7 +580,6 @@ class _KawaiiIconButton extends StatelessWidget {
   }
 }
 
-// Пример для помощи
 class _HelpExample extends StatelessWidget {
   final String letter;
   final Color color;

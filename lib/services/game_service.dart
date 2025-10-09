@@ -1,7 +1,7 @@
 import '../models/word_data.dart';
 import './words_api_service.dart';
 
-// Сервис с логикой игры
+// логика
 class GameService {
   final String targetWord;
   List<WordRow> rows = [];
@@ -11,12 +11,12 @@ class GameService {
   bool isWinner = false;
 
   GameService({required this.targetWord}) {
-    // Инициализируем 6 пустых строк (6 попыток)
+    // Инициализицая пустых строк
     rows = List.generate(6, (index) => WordRow.empty());
     _initKeyboardStatus();
   }
 
-  // Инициализация статуса клавиатуры
+  // Инициализация клавы
   void _initKeyboardStatus() {
     const russianLetters = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
     for (var letter in russianLetters.split('')) {
@@ -24,7 +24,7 @@ class GameService {
     }
   }
 
-  // Добавить букву в текущую строку
+  // Добавление буквы
   void addLetter(String letter) {
     if (isGameOver) return;
 
@@ -41,7 +41,7 @@ class GameService {
     }
   }
 
-  // Удалить последнюю букву из текущей строки
+  // Удаление ласт буквы
   void removeLetter() {
     if (isGameOver) return;
 
@@ -56,7 +56,7 @@ class GameService {
     }
   }
 
-  // Проверить введенное слово
+  // Проверка
   bool submitWord() {
     if (isGameOver) return false;
 
@@ -66,7 +66,7 @@ class GameService {
     final guessWord = currentRow.getWord();
     if (!WordsApiService.isValidWord(guessWord)) return false;
 
-    // Проверка слова и обновление статусов
+    // Обновление статуса
     final newRow = _checkWord(currentRow, guessWord);
     rows[currentRowIndex] = newRow;
 
@@ -85,7 +85,6 @@ class GameService {
     return true;
   }
 
-  // Проверка слова с пересозданием объектов (фикс подсветки)
   WordRow _checkWord(WordRow row, String guessWord) {
     final targetLetters = targetWord.split('');
     final guessLetters = guessWord.split('');

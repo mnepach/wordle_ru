@@ -4,7 +4,7 @@ import 'tile.dart';
 
 class GameBoard extends StatefulWidget {
   final List<WordRow> rows;
-  final int? winningRowIndex; // индекс строки, которую нужно анимировать (при выигрыше)
+  final int? winningRowIndex;
 
   const GameBoard({
     Key? key,
@@ -54,7 +54,7 @@ class _GameBoardState extends State<GameBoard> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final boardWidth = screenWidth * 0.88; // чтобы не прилипало к краям
+    final boardWidth = screenWidth * 0.88;
 
     return Center(
       child: Padding(

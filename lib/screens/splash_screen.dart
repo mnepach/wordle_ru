@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import '../constants/colors.dart';
 import 'game_screen.dart';
 
-// Приветственный экран с kawaii анимацией
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
 
@@ -22,7 +21,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   void initState() {
     super.initState();
 
-    // Анимация прыжка логотипа
     _bounceController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
@@ -31,7 +29,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       CurvedAnimation(parent: _bounceController, curve: Curves.elasticOut),
     );
 
-    // Анимация плавания
     _floatController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
@@ -40,13 +37,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
     );
 
-    // Анимация блёсток
     _sparkleController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat();
 
-    // Запускаем анимацию прыжка
     _bounceController.forward();
   }
 
@@ -100,12 +95,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               delay: index * 0.15 + 0.5,
               isStar: false,
             )),
-            // Основной контент
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Анимированный логотип
                   AnimatedBuilder(
                     animation: Listenable.merge([_bounceController, _floatController]),
                     builder: (context, child) {
@@ -117,7 +110,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     child: _KawaiiLogo(),
                   ),
                   const SizedBox(height: 40),
-                  // Название игры с иероглифами
                   AnimatedBuilder(
                     animation: _floatController,
                     builder: (context, child) {
@@ -145,7 +137,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             ],
                           ),
                         ),
-                        // Kawaii иероглифы в углу
+
                         Positioned(
                           top: -10,
                           right: -35,
@@ -179,7 +171,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     ),
                   ),
                   const SizedBox(height: 80),
-                  // Кнопка начать
                   AnimatedBuilder(
                     animation: _floatController,
                     builder: (context, child) {
@@ -220,7 +211,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   }
 }
 
-// Kawaii логотип с котиком или облаком
 class _KawaiiLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -246,11 +236,9 @@ class _KawaiiLogo extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Милое личико
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Глазки
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -260,7 +248,6 @@ class _KawaiiLogo extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // Улыбка
               Container(
                 width: 40,
                 height: 20,
@@ -278,7 +265,6 @@ class _KawaiiLogo extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              // Румянец
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -330,7 +316,6 @@ class _Blush extends StatelessWidget {
   }
 }
 
-// Плавающие формы (звёздочки и сердечки)
 class _FloatingShape extends StatelessWidget {
   final AnimationController controller;
   final double delay;
@@ -374,7 +359,6 @@ class _FloatingShape extends StatelessWidget {
   }
 }
 
-// Звёздочка
 class _Star extends StatelessWidget {
   final double size;
 
@@ -390,7 +374,6 @@ class _Star extends StatelessWidget {
   }
 }
 
-// Сердечко
 class _Heart extends StatelessWidget {
   final double size;
 

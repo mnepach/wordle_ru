@@ -38,7 +38,6 @@ class _LetterTileState extends State<LetterTile>
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.letter.character != widget.letter.character) {
-      // Сбрасываем анимации при изменении символа
       _flip = 0.0;
       _pop = false;
       if (widget.letter.character.isNotEmpty) {
