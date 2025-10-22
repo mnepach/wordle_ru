@@ -12,14 +12,10 @@ dependencies:
   shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.2
   http: ^1.1.0
-
-  # Firebase для синхронизации
-  firebase_core: ^2.24.2
-  firebase_database: ^10.4.0
-  firebase_auth: ^4.15.3
-
-  # Генерация уникальных ID
-  uuid: ^4.2.2
+  firebase_core: ^3.8.1
+  firebase_database: ^11.3.4
+  firebase_auth: ^5.3.4
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:
