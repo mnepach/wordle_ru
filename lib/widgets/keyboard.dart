@@ -58,50 +58,61 @@ class GameKeyboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
+        final screenWidth = MediaQuery.of(context).size.width;
+        final maxKeyboardWidth = 600.0;
+        final keyboardWidth = screenWidth > 600
+            ? maxKeyboardWidth
+            : constraints.maxWidth;
+
         const horizontalPadding = 8.0;
         const keyGap = 6.0;
-        final usableWidth = totalWidth - horizontalPadding * 2;
 
         Widget buildRow(List<String> row, {bool isThird = false}) {
-          return Row(
-            children: row.map((key) {
-              final bool isSpecial = key == 'ENTER' || key == 'DELETE';
-              final int flex = isThird && isSpecial ? 2 : 1;
+          return SizedBox(
+            width: keyboardWidth,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: row.map((key) {
+                final bool isSpecial = key == 'ENTER' || key == 'DELETE';
+                final int flex = isThird && isSpecial ? 2 : 1;
 
-              return Expanded(
-                flex: flex,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: keyGap / 2, vertical: 4),
-                  child: _KeyButton(
-                    label: key,
-                    backgroundColor: _getKeyColor(key),
-                    textColor: _getKeyTextColor(key),
-                    onTap: () {
-                      if (key == 'ENTER') {
-                        onEnterTap();
-                      } else if (key == 'DELETE') {
-                        onDeleteTap();
-                      } else {
-                        onLetterTap(key);
-                      }
-                    },
+                return Expanded(
+                  flex: flex,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: keyGap / 2, vertical: 4),
+                    child: _KeyButton(
+                      label: key,
+                      backgroundColor: _getKeyColor(key),
+                      textColor: _getKeyTextColor(key),
+                      onTap: () {
+                        if (key == 'ENTER') {
+                          onEnterTap();
+                        } else if (key == 'DELETE') {
+                          onDeleteTap();
+                        } else {
+                          onLetterTap(key);
+                        }
+                      },
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           );
         }
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              buildRow(_keyboardLayout[0]),
-              buildRow(_keyboardLayout[1]),
-              buildRow(_keyboardLayout[2], isThird: true),
-            ],
+        return Center(
+          child: Container(
+            width: keyboardWidth,
+            padding: const EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildRow(_keyboardLayout[0]),
+                buildRow(_keyboardLayout[1]),
+                buildRow(_keyboardLayout[2], isThird: true),
+              ],
+            ),
           ),
         );
       },

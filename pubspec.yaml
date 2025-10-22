@@ -9,9 +9,17 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  shared_preferences: ^2.2.2  # Для сохранения статистики
+  shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.2
-  http: ^1.1.0  # Для загрузки словаря
+  http: ^1.1.0
+
+  # Firebase для синхронизации
+  firebase_core: ^2.24.2
+  firebase_database: ^10.4.0
+  firebase_auth: ^4.15.3
+
+  # Генерация уникальных ID
+  uuid: ^4.2.2
 
 dev_dependencies:
   flutter_test:
@@ -21,3 +29,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/wordlists/

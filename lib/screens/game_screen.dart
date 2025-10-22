@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/game_service.dart';
 import '../services/words_api_service.dart';
+import '../services/stats_service.dart';
 import '../constants/colors.dart';
 import '../widgets/game_board.dart';
 import '../widgets/keyboard.dart';
 import '../widgets/floating_character.dart';
+import 'stats_screen.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({Key? key}) : super(key: key);
@@ -37,6 +39,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   Future<void> _initializeGame() async {
     await WordsApiService.initialize();
+    await StatsService.loadStats(); // Загружаем статистику при старте
     setState(() {
       _gameService = GameService(targetWord: WordsApiService.getRandomWord());
       _isLoading = false;
@@ -106,6 +109,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     setState(() {
       if (_gameService.isGameOver) {
+        // Записываем результат игры в статистику
+        final attempts = _gameService.currentRowIndex + 1;
+        StatsService.recordGame(
+          won: _gameService.isWinner,
+          attempts: attempts,
+        );
+
         Future.delayed(const Duration(milliseconds: 2000), () {
           _showGameOverDialog();
         });
@@ -232,28 +242,62 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ],
-              const SizedBox(height: 30),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _startNewGame();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
+              const SizedBox(height: 24),
+              // Кнопки
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const StatsScreen(),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      elevation: 5,
+                    ),
+                    icon: const Icon(Icons.bar_chart, size: 20),
+                    label: const Text(
+                      'Статистика',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  elevation: 5,
-                ),
-                child: const Text(
-                  'Новая игра',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _startNewGame();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      elevation: 5,
+                    ),
+                    icon: const Icon(Icons.refresh, size: 20),
+                    label: const Text(
+                      'Новая игра',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -307,11 +351,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
           child: Stack(
             children: [
-
               const FloatingCharacter(startPosition: Alignment.bottomLeft),
               const FloatingCharacter(startPosition: Alignment.bottomRight, delay: 1.5),
               const FloatingCharacter(startPosition: Alignment.centerLeft, delay: 3.0),
-
 
               SafeArea(
                 child: GestureDetector(
@@ -354,12 +396,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // помощь
           _KawaiiIconButton(
             icon: Icons.help_outline_rounded,
             onPressed: _showHelpDialog,
           ),
-          // лого
           AnimatedBuilder(
             animation: _headerAnimationController,
             builder: (context, child) {
@@ -423,10 +463,24 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
-          // новая игра
-          _KawaiiIconButton(
-            icon: Icons.refresh_rounded,
-            onPressed: _showNewGameConfirmation,
+          Row(
+            children: [
+              _KawaiiIconButton(
+                icon: Icons.bar_chart,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const StatsScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              _KawaiiIconButton(
+                icon: Icons.refresh_rounded,
+                onPressed: _showNewGameConfirmation,
+              ),
+            ],
           ),
         ],
       ),

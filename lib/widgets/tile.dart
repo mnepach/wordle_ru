@@ -7,12 +7,16 @@ class LetterTile extends StatefulWidget {
   final Letter letter;
   final int animationDelay;
   final bool highlight;
+  final double maxBoardWidth;
+  final double? fixedSize;
 
   const LetterTile({
     Key? key,
     required this.letter,
     this.animationDelay = 0,
     this.highlight = false,
+    this.maxBoardWidth = 0,
+    this.fixedSize,
   }) : super(key: key);
 
   @override
@@ -76,8 +80,11 @@ class _LetterTileState extends State<LetterTile>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final size = (screenWidth * 0.88 - 24) / 5;
+    final boardWidth = widget.maxBoardWidth > 0
+        ? widget.maxBoardWidth
+        : MediaQuery.of(context).size.width * 0.88;
+
+    final size = widget.fixedSize ?? (boardWidth - 24) / 5;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: _flip),
@@ -99,12 +106,12 @@ class _LetterTileState extends State<LetterTile>
             height: size,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: widget.letter.character.isEmpty
                     ? AppColors.border
                     : color.withOpacity(0.8),
-                width: 2.5,
+                width: 2.0,
               ),
             ),
             child: Center(
@@ -118,7 +125,7 @@ class _LetterTileState extends State<LetterTile>
                   child: Text(
                     widget.letter.character,
                     style: TextStyle(
-                      fontSize: size * 0.45,
+                      fontSize: size * 0.4,
                       fontWeight: FontWeight.bold,
                       color: showFront
                           ? AppColors.text

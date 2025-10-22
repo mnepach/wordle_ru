@@ -54,11 +54,25 @@ class _GameBoardState extends State<GameBoard> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final boardWidth = screenWidth * 0.88;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxBoardWidth = 400.0;
+    final boardWidth = screenWidth > 600
+        ? maxBoardWidth
+        : screenWidth * 0.88;
+
+    final tileSize = (boardWidth - 24) / 5;
+    final totalBoardHeight = (tileSize + 12) * widget.rows.length;
+
+    final double adjustedTileSize;
+    if (totalBoardHeight > screenHeight * 0.6) {
+      adjustedTileSize = (screenHeight * 0.6 - 12 * widget.rows.length) / widget.rows.length;
+    } else {
+      adjustedTileSize = tileSize;
+    }
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(widget.rows.length, (rowIndex) {
@@ -75,6 +89,8 @@ class _GameBoardState extends State<GameBoard> with SingleTickerProviderStateMix
                     letter: row.letters[letterIndex],
                     animationDelay: letterIndex * 100,
                     highlight: isWinningRow,
+                    maxBoardWidth: boardWidth,
+                    fixedSize: adjustedTileSize,
                   );
                 }),
               ),
@@ -87,14 +103,14 @@ class _GameBoardState extends State<GameBoard> with SingleTickerProviderStateMix
                   return Transform.scale(scale: _scaleAnim.value, child: child);
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   child: rowWidget,
                 ),
               );
             }
 
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: rowWidget,
             );
           }),
