@@ -27,30 +27,23 @@ class SyncService {
 
   final _syncStatusController = StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get syncStatusStream => _syncStatusController.stream;
+
   SyncStatus _currentStatus = SyncStatus.idle;
   SyncStatus get currentStatus => _currentStatus;
 
   Timer? _autoSyncTimer;
   DateTime? _lastSyncTime;
 
-  // Инициализация сервиса синхронизации
+  // -------------------- ИНИЦИАЛИЗАЦИЯ --------------------
   Future<void> initialize() async {
     try {
       _updateStatus(SyncStatus.syncing);
 
-      // Получаем или создаем анонимного пользователя
       _userId = await _getOrCreateUserId();
-
-      // Проверяем подключение к Firebase
       await _checkConnection();
-
-      // Загружаем данные из облака
       await _loadFromCloud();
 
-      // Подписываемся на изменения
       _subscribeToChanges();
-
-      // Запускаем автосинхронизацию каждые 30 секунд
       _startAutoSync();
 
       _updateStatus(SyncStatus.synced);
@@ -60,13 +53,12 @@ class SyncService {
     }
   }
 
-  // Получить или создать ID пользователя
+  // -------------------- СОЗДАНИЕ / ПОЛУЧЕНИЕ ПОЛЬЗОВАТЕЛЯ --------------------
   Future<String> _getOrCreateUserId() async {
     final prefs = await SharedPreferences.getInstance();
     String? userId = prefs.getString('cloud_user_id');
 
     if (userId == null) {
-      // Создаем анонимного пользователя Firebase
       try {
         final userCredential = await _auth.signInAnonymously();
         userId = userCredential.user?.uid;
@@ -75,12 +67,10 @@ class SyncService {
           await prefs.setString('cloud_user_id', userId);
         }
       } catch (e) {
-        // Если не удалось создать Firebase пользователя, генерируем UUID
         userId = const Uuid().v4();
         await prefs.setString('cloud_user_id', userId);
       }
     } else {
-      // Пытаемся восстановить сессию
       try {
         if (_auth.currentUser == null) {
           await _auth.signInAnonymously();
@@ -93,12 +83,19 @@ class SyncService {
     return userId!;
   }
 
-  // Проверка подключения к Firebase
+  // -------------------- ФУНКЦИЯ БЕЗОПАСНОСТИ ДЛЯ ПУТЕЙ --------------------
+  String _sanitizeKey(String input) {
+    // Заменяет все недопустимые символы на подчёркивания
+    return input.replaceAll(RegExp(r'[.#$\[\]/]'), '_');
+  }
+
+  // -------------------- ПРОВЕРКА СОЕДИНЕНИЯ --------------------
   Future<void> _checkConnection() async {
     try {
       final connectedRef = _database.ref('.info/connected');
       final snapshot = await connectedRef.get();
-      if (!snapshot.exists || snapshot.value != true) {
+
+      if (snapshot.value != true) {
         throw Exception('Нет подключения к Firebase');
       }
     } catch (e) {
@@ -106,32 +103,27 @@ class SyncService {
     }
   }
 
-  // Загрузка статистики из облака
+  // -------------------- ЗАГРУЗКА ИЗ ОБЛАКА --------------------
   Future<void> _loadFromCloud() async {
     if (_userId == null) return;
 
     try {
-      final ref = _database.ref('users/$_userId/stats');
+      final ref = _database.ref('users/${_sanitizeKey(_userId!)}/stats');
       final snapshot = await ref.get();
 
-      if (snapshot.exists) {
+      if (snapshot.exists && snapshot.value is Map) {
         final cloudData = Map<String, dynamic>.from(snapshot.value as Map);
         final cloudStats = GameStats.fromJson(cloudData);
 
-        // Получаем локальную статистику
         final localStats = await StatsService.loadStats();
 
-        // Сравниваем времена последнего обновления
         if (cloudStats.lastSyncTime.isAfter(localStats.lastSyncTime)) {
-          // Облачная версия новее - объединяем и сохраняем локально
           final mergedStats = localStats.mergeWith(cloudStats);
           await StatsService.saveStats(mergedStats);
         } else if (localStats.lastSyncTime.isAfter(cloudStats.lastSyncTime)) {
-          // Локальная версия новее - загружаем в облако
           await _uploadToCloud(localStats);
         }
       } else {
-        // Данных в облаке нет - загружаем локальные
         final localStats = await StatsService.loadStats();
         await _uploadToCloud(localStats);
       }
@@ -143,12 +135,12 @@ class SyncService {
     }
   }
 
-  // Загрузка статистики в облако
+  // -------------------- ВЫГРУЗКА В ОБЛАКО --------------------
   Future<void> _uploadToCloud(GameStats stats) async {
     if (_userId == null) return;
 
     try {
-      final ref = _database.ref('users/$_userId/stats');
+      final ref = _database.ref('users/${_sanitizeKey(_userId!)}/stats');
       final updatedStats = stats.copyWith(lastSyncTime: DateTime.now());
       await ref.set(updatedStats.toJson());
       _lastSyncTime = DateTime.now();
@@ -158,22 +150,19 @@ class SyncService {
     }
   }
 
-  // Подписка на изменения из облака
+  // -------------------- ПОДПИСКА НА ОБНОВЛЕНИЯ --------------------
   void _subscribeToChanges() {
     if (_userId == null) return;
 
-    final ref = _database.ref('users/$_userId/stats');
+    final ref = _database.ref('users/${_sanitizeKey(_userId!)}/stats');
 
     _statsSubscription = ref.onValue.listen((event) async {
-      if (event.snapshot.exists) {
+      if (event.snapshot.exists && event.snapshot.value is Map) {
         try {
           final cloudData = Map<String, dynamic>.from(event.snapshot.value as Map);
           final cloudStats = GameStats.fromJson(cloudData);
-
-          // Получаем локальную статистику
           final localStats = await StatsService.loadStats();
 
-          // Если облачная версия новее, обновляем локальную
           if (cloudStats.lastSyncTime.isAfter(localStats.lastSyncTime)) {
             await StatsService.saveStats(cloudStats);
             _updateStatus(SyncStatus.synced);
@@ -188,7 +177,7 @@ class SyncService {
     });
   }
 
-  // Синхронизация после игры
+  // -------------------- СИНХРОНИЗАЦИЯ ПОСЛЕ ИГРЫ --------------------
   Future<void> syncAfterGame() async {
     if (_userId == null) {
       _updateStatus(SyncStatus.offline);
@@ -197,10 +186,8 @@ class SyncService {
 
     try {
       _updateStatus(SyncStatus.syncing);
-
       final stats = await StatsService.loadStats();
       await _uploadToCloud(stats);
-
       _updateStatus(SyncStatus.synced);
     } catch (e) {
       print('Ошибка синхронизации: $e');
@@ -208,7 +195,7 @@ class SyncService {
     }
   }
 
-  // Принудительная синхронизация
+  // -------------------- ПРИНУДИТЕЛЬНАЯ СИНХРОНИЗАЦИЯ --------------------
   Future<void> forceSync() async {
     try {
       _updateStatus(SyncStatus.syncing);
@@ -220,7 +207,7 @@ class SyncService {
     }
   }
 
-  // Автоматическая синхронизация
+  // -------------------- АВТОСИНХРОНИЗАЦИЯ --------------------
   void _startAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
@@ -230,23 +217,17 @@ class SyncService {
     });
   }
 
-  // Обновление статуса
+  // -------------------- ОБНОВЛЕНИЕ СТАТУСА --------------------
   void _updateStatus(SyncStatus status) {
     _currentStatus = status;
     _syncStatusController.add(status);
   }
 
-  // Получить ID пользователя для отображения
-  Future<String?> getUserId() async {
-    return _userId;
-  }
+  // -------------------- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ --------------------
+  Future<String?> getUserId() async => _userId;
 
-  // Получить время последней синхронизации
-  DateTime? getLastSyncTime() {
-    return _lastSyncTime;
-  }
+  DateTime? getLastSyncTime() => _lastSyncTime;
 
-  // Сброс и повторная инициализация
   Future<void> reset() async {
     await dispose();
     final prefs = await SharedPreferences.getInstance();
@@ -254,24 +235,21 @@ class SyncService {
     await initialize();
   }
 
-  // Очистка ресурсов
   Future<void> dispose() async {
     _autoSyncTimer?.cancel();
     await _statsSubscription?.cancel();
     await _syncStatusController.close();
   }
 
-  // Проверка доступности облака
   Future<bool> isCloudAvailable() async {
     try {
       await _checkConnection();
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-  // Получить информацию о синхронизации
   String getSyncInfo() {
     switch (_currentStatus) {
       case SyncStatus.idle:
