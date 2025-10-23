@@ -1,20 +1,2 @@
-plugins {
-    id("java")
-}
-
-group = "org.example"
-version = "1.0-SNAPSHOT"
-
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    classpath ("com.google.gms:google-services:4.4.4")
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
+// Этот файл не используется в Flutter проектах
+// Gradle конфигурация находится в android/build.gradle.kts
