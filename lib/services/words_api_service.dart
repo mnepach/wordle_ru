@@ -52,7 +52,7 @@ class WordsApiService {
       }
 
       try {
-        final allowedAsset = await rootBundle.loadString('assets/wordlists/allowed.txt');
+        final allowedAsset = await rootBundle.loadString('assets/words/answers.txt');
         final allowed = LineSplitter.split(allowedAsset)
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty)

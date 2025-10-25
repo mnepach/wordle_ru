@@ -1,31 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'services/sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Инициализация Firebase
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      // Для Web и других платформ
-        apiKey: "AIzaSyBytxs5pn_jQnqpTeUusQKus5YhtPWdC-c",
-        authDomain: "wordle-ru-f1f08.firebaseapp.com",
-        databaseURL: "https://wordle-ru-f1f08-default-rtdb.firebaseio.com",
-        projectId: "wordle-ru-f1f08",
-        storageBucket: "wordle-ru-f1f08.firebasestorage.app",
-        messagingSenderId: "228393585619",
-        appId: "1:228393585619:web:1c6e9f4fa7adbb1247bd26"
-    ),
-  );
-
-  // Инициализация сервиса синхронизации
   try {
-    await SyncService().initialize();
+    // Инициализация Firebase с правильными опциями
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('Firebase успешно инициализирован');
+
+    // Даём Firebase время на инициализацию
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Инициализация сервиса синхронизации
+    try {
+      await SyncService().initialize();
+      print('Сервис синхронизации успешно инициализирован');
+    } catch (e) {
+      print('Не удалось инициализировать синхронизацию: $e');
+      // Продолжаем работу без синхронизации
+    }
   } catch (e) {
-    print('Не удалось инициализировать синхронизацию: $e');
+    print('Ошибка инициализации Firebase: $e');
+    // Продолжаем работу без Firebase
   }
 
   SystemChrome.setPreferredOrientations([
