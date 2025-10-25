@@ -2,7 +2,8 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import '../models/game_stats.dart';
 import 'stats_service.dart';
 
@@ -39,7 +40,6 @@ class SyncService {
     try {
       _updateStatus(SyncStatus.syncing);
 
-      // Инициализируем базу данных с правильным URL
       _database = FirebaseDatabase.instanceFor(
         app: _auth.app,
         databaseURL: 'https://wordle-ru-f1f08-default-rtdb.firebaseio.com',
@@ -75,28 +75,23 @@ class SyncService {
         userId = userCredential.user?.uid;
 
         if (userId != null && userId.isNotEmpty) {
-          // Firebase UID всегда безопасен
-          await prefs.setString('cloud_user_id', userId);
-          print('Создан новый пользователь Firebase: $userId');
+          // Хешируем Firebase UID для безопасного использования в путях
+          final safeUserId = _hashUserId(userId);
+          await prefs.setString('cloud_user_id', safeUserId);
+          await prefs.setString('original_firebase_uid', userId);
+          print('Создан новый пользователь Firebase: $safeUserId');
+          return safeUserId;
         } else {
           throw Exception('Firebase вернул пустой UID');
         }
       } catch (e) {
         print('Ошибка создания Firebase пользователя: $e');
-        // Создаём безопасный ID вручную
         userId = _generateSafeUserId();
         await prefs.setString('cloud_user_id', userId);
         print('Создан локальный ID: $userId');
       }
     } else {
       print('Используем существующий ID: $userId');
-
-      // Проверяем, что ID безопасный
-      if (!_isValidFirebasePath(userId)) {
-        print('ID содержит недопустимые символы, генерируем новый');
-        userId = _generateSafeUserId();
-        await prefs.setString('cloud_user_id', userId);
-      }
 
       try {
         if (_auth.currentUser == null) {
@@ -110,33 +105,19 @@ class SyncService {
     return userId!;
   }
 
-  // Генерация безопасного ID (только буквы, цифры, подчёркивания и дефисы)
+  // Хеширование UID для создания безопасного Firebase пути
+  String _hashUserId(String uid) {
+    final bytes = utf8.encode(uid);
+    final digest = sha256.convert(bytes);
+    // Берем первые 32 символа хеша (только hex символы: 0-9, a-f)
+    return 'u${digest.toString().substring(0, 31)}';
+  }
+
+  // Генерация безопасного ID (только буквы и цифры)
   String _generateSafeUserId() {
-    final uuid = const Uuid().v4().replaceAll('-', '');
-    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    return 'user_${timestamp}_$uuid';
-  }
-
-  // Проверка валидности пути Firebase
-  bool _isValidFirebasePath(String path) {
-    // Firebase не допускает: . $ # [ ] /
-    final invalidChars = RegExp(r'[.#$\[\]/]');
-    return !invalidChars.hasMatch(path) && path.isNotEmpty;
-  }
-
-  // Безопасное преобразование строки для Firebase пути
-  String _sanitizeForFirebase(String input) {
-    if (input.isEmpty) return 'empty';
-
-    // Заменяем все недопустимые символы на подчёркивания
-    return input
-        .replaceAll('.', '_')
-        .replaceAll('#', '_')
-        .replaceAll(r'$', '_')
-        .replaceAll('[', '_')
-        .replaceAll(']', '_')
-        .replaceAll('/', '_')
-        .replaceAll(' ', '_');
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final random = timestamp.toString().split('').reversed.join();
+    return 'u${timestamp}x$random';
   }
 
   // -------------------- ПРОВЕРКА СОЕДИНЕНИЯ --------------------
@@ -169,9 +150,7 @@ class SyncService {
     }
 
     try {
-      // Используем безопасный путь
-      final safeUserId = _sanitizeForFirebase(_userId!);
-      final path = 'users/$safeUserId/stats';
+      final path = 'users/$_userId/stats';
       print('Загружаем данные из пути: $path');
 
       final ref = _database!.ref(path);
@@ -217,8 +196,7 @@ class SyncService {
     }
 
     try {
-      final safeUserId = _sanitizeForFirebase(_userId!);
-      final path = 'users/$safeUserId/stats';
+      final path = 'users/$_userId/stats';
       print('Загружаем данные в путь: $path');
 
       final ref = _database!.ref(path);
@@ -244,8 +222,7 @@ class SyncService {
       return;
     }
 
-    final safeUserId = _sanitizeForFirebase(_userId!);
-    final path = 'users/$safeUserId/stats';
+    final path = 'users/$_userId/stats';
     print('Подписываемся на изменения в пути: $path');
 
     final ref = _database!.ref(path);
@@ -328,6 +305,7 @@ class SyncService {
     await dispose();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('cloud_user_id');
+    await prefs.remove('original_firebase_uid');
     await initialize();
   }
 

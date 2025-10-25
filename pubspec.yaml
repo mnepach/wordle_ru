@@ -15,14 +15,16 @@ dependencies:
   cupertino_icons: ^1.0.2
   http: ^1.1.0
 
-  # ОБНОВЛЕННЫЕ ПАКЕТЫ FIREBASE (последние версии на Октябрь 2025)
-  # Обновление ядра устранит ошибку "Invalid token in path"
-  firebase_core: ^2.24.2
-  firebase_auth: ^4.15.2
-  firebase_database: ^10.4.1 # Совместимая версия Realtime Database
+  # Firebase (обновленные версии)
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  firebase_database: ^11.1.4
 
   # Генерация уникальных ID
   uuid: ^4.2.2
+
+  # Для хеширования ID
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -33,5 +35,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-assets:
-  - assets/words/
+  assets:
+    - assets/words/
