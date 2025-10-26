@@ -10,24 +10,20 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Базовые пакеты
   shared_preferences: ^2.2.2
-  cupertino_icons: ^1.0.2
-  http: ^1.1.0
+  cupertino_icons: ^1.0.6
+  http: ^1.2.0
 
-  # Firebase (обновленные версии)
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
-  firebase_database: ^11.1.4
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.16.0
+  firebase_database: ^10.4.0
 
-  # Генерация уникальных ID
-  uuid: ^4.2.2
+  uuid: ^4.3.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: ^0.13.1
-  flutter_native_splash: ^2.3.0
+  flutter_lints: ^3.0.1
 
 flutter:
   uses-material-design: true
