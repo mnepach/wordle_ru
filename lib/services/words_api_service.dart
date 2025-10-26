@@ -6,32 +6,19 @@ import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class WordsApiService {
   static bool _initialized = false;
   static List<String> _answers = [
-    'БАГЕТ',
-    'КНИГА',
-    'ГАМАК',
-    'ОКЕАН',
-    'ЗЕМЛЯ',
-    'ЛИЛИЯ',
-    'УСПЕХ',
-    'ГОРОД',
-    'РЕЧКА',
-    'ТАЙНА',
-    'ДОЖДЬ',
-    'РАДИЙ',
-    'ТРАВА',
-    'ГРОЗА',
-    'АТЛАС',
-    'ПЕСНЯ',
-    'СКВЕР',
-    'ОСЕНЬ',
-    'ОАЗИС',
-    'ВЕНИК',
-    'ХОЛСТ',
-    'ФАКЕЛ'
+    'БАГЕТ', 'КНИГА', 'ГАМАК', 'ОКЕАН', 'ЗЕМЛЯ',
+    'ЛИЛИЯ', 'УСПЕХ', 'ГОРОД', 'РЕЧКА', 'ТАЙНА',
+    'ДОЖДЬ', 'РАДИЙ', 'ТРАВА', 'ГРОЗА', 'АТЛАС',
+    'ПЕСНЯ', 'СКВЕР', 'ОСЕНЬ', 'ОАЗИС', 'ВЕНИК',
+    'ХОЛСТ', 'ФАКЕЛ', 'КОШКА', 'ЛАМПА', 'ГРУША',
+    'СОКОЛ', 'ПЕЧКА', 'НОСОК', 'ЛОДКА', 'СТОЛБ',
+    'ДОСКА', 'КАРТА', 'ТУМАН', 'ПАЛЕЦ', 'СВЕЧА',
+    'РЫБКА', 'ЗАМОК', 'ОЗЕРО', 'БАНКА', 'МЫШКА'
   ];
   static Set<String> _allowed = {};
 
@@ -41,17 +28,22 @@ class WordsApiService {
   static Future<void> initialize() async {
     if (_initialized) return;
 
+    print('Инициализация словаря...');
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedAllowed = prefs.getStringList('w_allowed_v3');
 
       if (cachedAllowed != null && cachedAllowed.isNotEmpty) {
         _allowed = cachedAllowed.map((w) => w.toUpperCase()).toSet();
+        print('Загружено ${_allowed.length} слов из кэша');
         _initialized = true;
         return;
       }
 
+      // Пробуем загрузить из assets
       try {
+        print('Пытаемся загрузить из assets...');
         final allowedAsset = await rootBundle.loadString('assets/words/answers.txt');
         final allowed = LineSplitter.split(allowedAsset)
             .map((s) => s.trim())
@@ -62,18 +54,34 @@ class WordsApiService {
 
         if (allowed.isNotEmpty) {
           _allowed = allowed;
+          print('Загружено ${_allowed.length} слов из assets');
           _cacheWords();
           _initialized = true;
           return;
         }
-      } catch (_) {}
+      } catch (e) {
+        print('Не удалось загрузить из assets: $e');
+      }
 
+      // Пробуем загрузить из API
+      print('Пытаемся загрузить из API...');
       final loaded = await _tryLoadFromWordleApi();
       if (loaded && _allowed.isNotEmpty) {
+        print('Загружено ${_allowed.length} слов из API');
+        _cacheWords();
+      } else {
+        // Используем встроенный список слов как fallback
+        print('Используем встроенный список слов (${_answers.length} слов)');
+        _allowed = Set<String>.from(_answers);
         _cacheWords();
       }
-    } catch (_) {} finally {
+    } catch (e) {
+      print('Ошибка инициализации словаря: $e');
+      // В случае ошибки используем встроенный список
+      _allowed = Set<String>.from(_answers);
+    } finally {
       _initialized = true;
+      print('Словарь инициализирован. Доступно слов: ${_allowed.length}');
     }
   }
 
@@ -103,16 +111,22 @@ class WordsApiService {
         }
       }
     } on TimeoutException catch (_) {
+      print('Timeout при загрузке словаря из API');
     } on SocketException catch (_) {
-    } catch (_) {}
+      print('Нет подключения к интернету');
+    } catch (e) {
+      print('Ошибка загрузки из API: $e');
+    }
     return false;
   }
 
   static void _cacheWords() {
-    final prefs = SharedPreferences.getInstance();
-    prefs.then((prefs) {
+    SharedPreferences.getInstance().then((prefs) {
       prefs.setStringList('w_allowed_v3', _allowed.toList());
       prefs.setStringList('w_answers_v3', _answers);
+      print('Словарь закэширован');
+    }).catchError((e) {
+      print('Ошибка кэширования: $e');
     });
   }
 

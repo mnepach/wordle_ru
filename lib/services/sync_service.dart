@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto/crypto.dart';
-import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import '../models/game_stats.dart';
 import 'stats_service.dart';
+import 'firebase_rest_service.dart';
 
 enum SyncStatus {
   idle,
@@ -35,15 +36,21 @@ class SyncService {
   Timer? _autoSyncTimer;
   DateTime? _lastSyncTime;
 
+  // Определяем платформу
+  bool get _isWindows => !kIsWeb && Platform.isWindows;
+  bool get _useRestApi => _isWindows || kIsWeb;
+
   // -------------------- ИНИЦИАЛИЗАЦИЯ --------------------
   Future<void> initialize() async {
     try {
       _updateStatus(SyncStatus.syncing);
 
-      _database = FirebaseDatabase.instanceFor(
-        app: _auth.app,
-        databaseURL: 'https://wordle-ru-f1f08-default-rtdb.firebaseio.com',
-      );
+      if (!_useRestApi) {
+        _database = FirebaseDatabase.instanceFor(
+          app: _auth.app,
+          databaseURL: 'https://wordle-ru-f1f08-default-rtdb.firebaseio.com',
+        );
+      }
 
       _userId = await _getOrCreateUserId();
 
@@ -54,7 +61,10 @@ class SyncService {
       await _checkConnection();
       await _loadFromCloud();
 
-      _subscribeToChanges();
+      if (!_useRestApi) {
+        _subscribeToChanges();
+      }
+
       _startAutoSync();
 
       _updateStatus(SyncStatus.synced);
@@ -75,8 +85,7 @@ class SyncService {
         userId = userCredential.user?.uid;
 
         if (userId != null && userId.isNotEmpty) {
-          // Хешируем Firebase UID для безопасного использования в путях
-          final safeUserId = _hashUserId(userId);
+          final safeUserId = _sanitizeFirebaseUid(userId);
           await prefs.setString('cloud_user_id', safeUserId);
           await prefs.setString('original_firebase_uid', userId);
           print('Создан новый пользователь Firebase: $safeUserId');
@@ -105,15 +114,14 @@ class SyncService {
     return userId!;
   }
 
-  // Хеширование UID для создания безопасного Firebase пути
-  String _hashUserId(String uid) {
-    final bytes = utf8.encode(uid);
-    final digest = sha256.convert(bytes);
-    // Берем первые 32 символа хеша (только hex символы: 0-9, a-f)
-    return 'u${digest.toString().substring(0, 31)}';
+  String _sanitizeFirebaseUid(String uid) {
+    final sanitized = uid.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    if (sanitized.isEmpty) {
+      return _generateSafeUserId();
+    }
+    return 'u$sanitized';
   }
 
-  // Генерация безопасного ID (только буквы и цифры)
   String _generateSafeUserId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = timestamp.toString().split('').reversed.join();
@@ -122,21 +130,24 @@ class SyncService {
 
   // -------------------- ПРОВЕРКА СОЕДИНЕНИЯ --------------------
   Future<void> _checkConnection() async {
-    if (_database == null) {
-      throw Exception('База данных не инициализирована');
-    }
-
     try {
-      final connectedRef = _database!.ref('.info/connected');
-      final snapshot = await connectedRef.get().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => throw TimeoutException('Timeout при подключении к Firebase'),
-      );
+      if (_useRestApi) {
+        final connected = await FirebaseRestService.checkConnection();
+        if (!connected) {
+          throw Exception('Нет подключения к Firebase');
+        }
+        print('REST API подключение успешно');
+      } else {
+        final connectedRef = _database!.ref('.info/connected');
+        final snapshot = await connectedRef.get().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => throw TimeoutException('Timeout при подключении к Firebase'),
+        );
 
-      print('Состояние подключения: ${snapshot.value}');
-
-      if (snapshot.value != true) {
-        throw Exception('Нет подключения к Firebase');
+        if (snapshot.value != true) {
+          throw Exception('Нет подключения к Firebase');
+        }
+        print('Firebase Database подключение успешно');
       }
     } catch (e) {
       throw Exception('Ошибка подключения: $e');
@@ -145,25 +156,32 @@ class SyncService {
 
   // -------------------- ЗАГРУЗКА ИЗ ОБЛАКА --------------------
   Future<void> _loadFromCloud() async {
-    if (_userId == null || _userId!.isEmpty || _database == null) {
-      throw Exception('User ID или база данных не инициализированы');
+    if (_userId == null || _userId!.isEmpty) {
+      throw Exception('User ID не инициализирован');
     }
 
     try {
-      final path = 'users/$_userId/stats';
-      print('Загружаем данные из пути: $path');
+      print('Загружаем данные для пользователя: $_userId');
 
-      final ref = _database!.ref(path);
-      final snapshot = await ref.get().timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Timeout при загрузке данных'),
-      );
+      Map<String, dynamic>? cloudData;
 
-      if (snapshot.exists && snapshot.value is Map) {
+      if (_useRestApi) {
+        cloudData = await FirebaseRestService.getData(_userId!);
+      } else {
+        final ref = _database!.ref('users/$_userId/stats');
+        final snapshot = await ref.get().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw TimeoutException('Timeout при загрузке данных'),
+        );
+
+        if (snapshot.exists && snapshot.value is Map) {
+          cloudData = Map<String, dynamic>.from(snapshot.value as Map);
+        }
+      }
+
+      if (cloudData != null) {
         print('Найдены данные в облаке');
-        final cloudData = Map<String, dynamic>.from(snapshot.value as Map);
         final cloudStats = GameStats.fromJson(cloudData);
-
         final localStats = await StatsService.loadStats();
 
         if (cloudStats.lastSyncTime.isAfter(localStats.lastSyncTime)) {
@@ -191,34 +209,43 @@ class SyncService {
 
   // -------------------- ВЫГРУЗКА В ОБЛАКО --------------------
   Future<void> _uploadToCloud(GameStats stats) async {
-    if (_userId == null || _userId!.isEmpty || _database == null) {
-      throw Exception('User ID или база данных не инициализированы');
+    if (_userId == null || _userId!.isEmpty) {
+      throw Exception('User ID не инициализирован');
     }
 
     try {
-      final path = 'users/$_userId/stats';
-      print('Загружаем данные в путь: $path');
+      print('Загружаем данные в облако для пользователя: $_userId');
 
-      final ref = _database!.ref(path);
       final updatedStats = stats.copyWith(lastSyncTime: DateTime.now());
+      bool success;
 
-      await ref.set(updatedStats.toJson()).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Timeout при загрузке данных'),
-      );
+      if (_useRestApi) {
+        success = await FirebaseRestService.setData(_userId!, updatedStats);
+      } else {
+        final ref = _database!.ref('users/$_userId/stats');
+        await ref.set(updatedStats.toJson()).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw TimeoutException('Timeout при загрузке данных'),
+        );
+        success = true;
+      }
 
-      _lastSyncTime = DateTime.now();
-      print('Данные успешно загружены в облако');
+      if (success) {
+        _lastSyncTime = DateTime.now();
+        print('Данные успешно загружены в облако');
+      } else {
+        throw Exception('Не удалось сохранить данные');
+      }
     } catch (e) {
       print('Ошибка загрузки в облако: $e');
       throw e;
     }
   }
 
-  // -------------------- ПОДПИСКА НА ОБНОВЛЕНИЯ --------------------
+  // -------------------- ПОДПИСКА НА ОБНОВЛЕНИЯ (только для Android/iOS) --------------------
   void _subscribeToChanges() {
     if (_userId == null || _userId!.isEmpty || _database == null) {
-      print('Не удалось подписаться на изменения: нет User ID или базы данных');
+      print('Не удалось подписаться на изменения');
       return;
     }
 
@@ -252,7 +279,7 @@ class SyncService {
 
   // -------------------- СИНХРОНИЗАЦИЯ ПОСЛЕ ИГРЫ --------------------
   Future<void> syncAfterGame() async {
-    if (_userId == null || _database == null) {
+    if (_userId == null) {
       _updateStatus(SyncStatus.offline);
       return;
     }

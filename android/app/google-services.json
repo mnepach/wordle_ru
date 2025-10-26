@@ -8,25 +8,6 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:228393585619:android:94d466e8e140157747bd26",
-        "android_client_info": {
-          "package_name": "com.example.myapp"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBOPELu1wvczSivugKyixQ70n5YRTjfSBo"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:228393585619:android:d870e8edec7f091947bd26",
         "android_client_info": {
           "package_name": "com.example.wordle_ru"

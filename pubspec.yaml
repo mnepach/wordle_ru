@@ -23,9 +23,6 @@ dependencies:
   # Генерация уникальных ID
   uuid: ^4.2.2
 
-  # Для хеширования ID
-  crypto: ^3.0.3
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
