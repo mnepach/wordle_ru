@@ -1,6 +1,6 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
@@ -13,12 +13,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-        // Добавляем аргумент компилятора для диагностики deprecated API
-        compilerArgs.add("-Xlint:deprecation")
     }
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
+        freeCompilerArgs += "-Xlint:deprecation"
     }
 
     defaultConfig {
@@ -31,7 +30,23 @@ android {
 
     buildTypes {
         release {
+            // пока используем debug-подпись, чтобы не было ошибок
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    applicationVariants.all {
+        outputs.all {
+            val outputDir = File(project.rootDir, "build/app/outputs/flutter-apk")
+            outputDir.mkdirs()
+            outputFileName = "app-${name}.apk"
+
+            doLast {
+                val builtApk = File(this@all.outputs.first().outputFile.parent, outputFileName)
+                if (builtApk.exists()) {
+                    builtApk.copyTo(File(outputDir, outputFileName), overwrite = true)
+                }
+            }
         }
     }
 }
