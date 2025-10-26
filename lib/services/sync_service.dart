@@ -36,11 +36,9 @@ class SyncService {
   Timer? _autoSyncTimer;
   DateTime? _lastSyncTime;
 
-  // Определяем платформу
   bool get _isWindows => !kIsWeb && Platform.isWindows;
   bool get _useRestApi => _isWindows || kIsWeb;
 
-  // -------------------- ИНИЦИАЛИЗАЦИЯ --------------------
   Future<void> initialize() async {
     try {
       _updateStatus(SyncStatus.syncing);
@@ -58,6 +56,8 @@ class SyncService {
         throw Exception('Не удалось получить User ID');
       }
 
+      print('Используем User ID: $_userId');
+
       await _checkConnection();
       await _loadFromCloud();
 
@@ -74,7 +74,6 @@ class SyncService {
     }
   }
 
-  // -------------------- СОЗДАНИЕ / ПОЛУЧЕНИЕ ПОЛЬЗОВАТЕЛЯ --------------------
   Future<String> _getOrCreateUserId() async {
     final prefs = await SharedPreferences.getInstance();
     String? userId = prefs.getString('cloud_user_id');
@@ -82,25 +81,31 @@ class SyncService {
     if (userId == null || userId.isEmpty) {
       try {
         final userCredential = await _auth.signInAnonymously();
-        userId = userCredential.user?.uid;
+        final firebaseUid = userCredential.user?.uid;
 
-        if (userId != null && userId.isNotEmpty) {
-          final safeUserId = _sanitizeFirebaseUid(userId);
-          await prefs.setString('cloud_user_id', safeUserId);
-          await prefs.setString('original_firebase_uid', userId);
-          print('Создан новый пользователь Firebase: $safeUserId');
-          return safeUserId;
+        if (firebaseUid != null && firebaseUid.isNotEmpty) {
+          userId = _createSafeUserId(firebaseUid);
+          await prefs.setString('cloud_user_id', userId);
+          await prefs.setString('original_firebase_uid', firebaseUid);
+          print('Создан новый пользователь Firebase: $userId (из $firebaseUid)');
+          return userId;
         } else {
           throw Exception('Firebase вернул пустой UID');
         }
       } catch (e) {
         print('Ошибка создания Firebase пользователя: $e');
-        userId = _generateSafeUserId();
+        userId = _generateFallbackUserId();
         await prefs.setString('cloud_user_id', userId);
-        print('Создан локальный ID: $userId');
+        print('Создан локальный fallback ID: $userId');
       }
     } else {
       print('Используем существующий ID: $userId');
+
+      if (!_isValidFirebasePath(userId)) {
+        print('ID содержит недопустимые символы, создаём новый');
+        userId = _generateFallbackUserId();
+        await prefs.setString('cloud_user_id', userId);
+      }
 
       try {
         if (_auth.currentUser == null) {
@@ -114,21 +119,29 @@ class SyncService {
     return userId!;
   }
 
-  String _sanitizeFirebaseUid(String uid) {
-    final sanitized = uid.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-    if (sanitized.isEmpty) {
-      return _generateSafeUserId();
+  String _createSafeUserId(String firebaseUid) {
+    final safe = firebaseUid
+        .substring(0, firebaseUid.length > 20 ? 20 : firebaseUid.length)
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+    if (safe.isEmpty) {
+      return _generateFallbackUserId();
     }
-    return 'u$sanitized';
+
+    return 'u$safe';
   }
 
-  String _generateSafeUserId() {
+  String _generateFallbackUserId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = timestamp.toString().split('').reversed.join();
-    return 'u${timestamp}x$random';
+    final random = (timestamp % 999999).toString().padLeft(6, '0');
+    return 'u${timestamp}r$random';
   }
 
-  // -------------------- ПРОВЕРКА СОЕДИНЕНИЯ --------------------
+  bool _isValidFirebasePath(String path) {
+    final invalidChars = RegExp(r'[\.\$#\[\]/]');
+    return !invalidChars.hasMatch(path) && path.isNotEmpty;
+  }
+
   Future<void> _checkConnection() async {
     try {
       if (_useRestApi) {
@@ -154,7 +167,6 @@ class SyncService {
     }
   }
 
-  // -------------------- ЗАГРУЗКА ИЗ ОБЛАКА --------------------
   Future<void> _loadFromCloud() async {
     if (_userId == null || _userId!.isEmpty) {
       throw Exception('User ID не инициализирован');
@@ -207,7 +219,6 @@ class SyncService {
     }
   }
 
-  // -------------------- ВЫГРУЗКА В ОБЛАКО --------------------
   Future<void> _uploadToCloud(GameStats stats) async {
     if (_userId == null || _userId!.isEmpty) {
       throw Exception('User ID не инициализирован');
@@ -242,7 +253,6 @@ class SyncService {
     }
   }
 
-  // -------------------- ПОДПИСКА НА ОБНОВЛЕНИЯ (только для Android/iOS) --------------------
   void _subscribeToChanges() {
     if (_userId == null || _userId!.isEmpty || _database == null) {
       print('Не удалось подписаться на изменения');
@@ -277,7 +287,6 @@ class SyncService {
     });
   }
 
-  // -------------------- СИНХРОНИЗАЦИЯ ПОСЛЕ ИГРЫ --------------------
   Future<void> syncAfterGame() async {
     if (_userId == null) {
       _updateStatus(SyncStatus.offline);
@@ -295,7 +304,6 @@ class SyncService {
     }
   }
 
-  // -------------------- ПРИНУДИТЕЛЬНАЯ СИНХРОНИЗАЦИЯ --------------------
   Future<void> forceSync() async {
     try {
       _updateStatus(SyncStatus.syncing);
@@ -307,7 +315,6 @@ class SyncService {
     }
   }
 
-  // -------------------- АВТОСИНХРОНИЗАЦИЯ --------------------
   void _startAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
@@ -317,13 +324,11 @@ class SyncService {
     });
   }
 
-  // -------------------- ОБНОВЛЕНИЕ СТАТУСА --------------------
   void _updateStatus(SyncStatus status) {
     _currentStatus = status;
     _syncStatusController.add(status);
   }
 
-  // -------------------- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ --------------------
   Future<String?> getUserId() async => _userId;
 
   DateTime? getLastSyncTime() => _lastSyncTime;

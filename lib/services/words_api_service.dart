@@ -9,43 +9,61 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 class WordsApiService {
   static bool _initialized = false;
-  static List<String> _answers = [
-    'БАГЕТ', 'КНИГА', 'ГАМАК', 'ОКЕАН', 'ЗЕМЛЯ',
-    'ЛИЛИЯ', 'УСПЕХ', 'ГОРОД', 'РЕЧКА', 'ТАЙНА',
-    'ДОЖДЬ', 'РАДИЙ', 'ТРАВА', 'ГРОЗА', 'АТЛАС',
-    'ПЕСНЯ', 'СКВЕР', 'ОСЕНЬ', 'ОАЗИС', 'ВЕНИК',
-    'ХОЛСТ', 'ФАКЕЛ', 'КОШКА', 'ЛАМПА', 'ГРУША',
-    'СОКОЛ', 'ПЕЧКА', 'НОСОК', 'ЛОДКА', 'СТОЛБ',
-    'ДОСКА', 'КАРТА', 'ТУМАН', 'ПАЛЕЦ', 'СВЕЧА',
-    'РЫБКА', 'ЗАМОК', 'ОЗЕРО', 'БАНКА', 'МЫШКА'
+
+  // Список слов для ОТГАДЫВАНИЯ (не меняется!)
+  static final List<String> _answers = [
+    'КОШКА', 'ЛАМПА', 'КНИГА', 'ГРУША', 'СОКОЛ',
+    'ТРАВА', 'ПЕЧКА', 'НОСОК', 'ЛОДКА', 'СТОЛБ',
+    'ДОСКА', 'КАРТА', 'ПЕСНЯ', 'ТУМАН', 'ПАЛЕЦ',
+    'СВЕЧА', 'РЫБКА', 'ЗАМОК', 'ОЗЕРО', 'БАНКА',
   ];
+
+  // Список слов для ВВОДА (можно загрузить из API)
   static Set<String> _allowed = {};
+
   static const _wordleRussianRaw = 'https://raw.githubusercontent.com/mediahope/Wordle-Russian-Dictionary/main/Russian.txt';
 
   static Future<void> initialize() async {
     if (_initialized) return;
     print('Инициализация словаря...');
+
     try {
-      print('Пытаемся загрузить из API...');
+      // 1. Добавляем все слова-ответы в список допустимых слов
+      _allowed = Set<String>.from(_answers);
+      print('Добавлено ${_answers.length} слов-ответов в список допустимых');
+
+      // 2. Пытаемся загрузить дополнительные слова из кэша
+      final cached = await _loadFromCache();
+      if (cached) {
+        print('Загружено из кэша: ${_allowed.length} слов');
+        _initialized = true;
+        return;
+      }
+
+      // 3. Пытаемся загрузить из API
+      print('Пытаемся загрузить дополнительные слова из API...');
       final loaded = await _tryLoadFromWordleApi();
-      if (loaded && _allowed.isNotEmpty) {
-        print('Загружено ${_allowed.length} слов из API');
+      if (loaded && _allowed.length > _answers.length) {
+        print('Загружено ${_allowed.length} слов из API (включая ${_answers.length} ответов)');
         _cacheWords();
         _initialized = true;
         return;
       }
+
+      // 4. Пытаемся загрузить из assets
       try {
         print('Пытаемся загрузить из assets...');
         final allowedAsset = await rootBundle.loadString('assets/words/answers.txt');
-        final allowed = LineSplitter.split(allowedAsset)
+        final additionalWords = LineSplitter.split(allowedAsset)
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty)
             .map((s) => s.toUpperCase())
             .where((w) => _isValidWordleWord(w))
             .toSet();
-        if (allowed.isNotEmpty) {
-          _allowed = allowed;
-          print('Загружено ${_allowed.length} слов из assets');
+
+        if (additionalWords.isNotEmpty) {
+          _allowed.addAll(additionalWords);
+          print('Добавлено ${additionalWords.length} слов из assets');
           _cacheWords();
           _initialized = true;
           return;
@@ -53,17 +71,20 @@ class WordsApiService {
       } catch (e) {
         print('Не удалось загрузить из assets: $e');
       }
-      print('Используем встроенный список слов (${_answers.length} слов)');
-      _allowed = Set<String>.from(_answers);
+
+      // 5. Используем только слова-ответы
+      print('Используем только встроенный список из ${_answers.length} слов для ввода');
       _cacheWords();
       _initialized = true;
+
     } catch (e) {
       print('Ошибка инициализации словаря: $e');
       _allowed = Set<String>.from(_answers);
       _cacheWords();
       _initialized = true;
     }
-    print('Словарь инициализирован. Доступно слов: ${_allowed.length}');
+
+    print('Словарь инициализирован. Доступно слов для ввода: ${_allowed.length}, для ответов: ${_answers.length}');
   }
 
   static bool _isValidWordleWord(String word) {
@@ -77,24 +98,27 @@ class WordsApiService {
       print('Отправляем запрос к $_wordleRussianRaw');
       final resp = await http.get(Uri.parse(_wordleRussianRaw)).timeout(const Duration(seconds: 15));
       print('Статус ответа: ${resp.statusCode}');
+
       if (resp.statusCode == 200) {
         final lines = LineSplitter.split(resp.body);
-        final Set<String> words = {};
+        int addedCount = 0;
+
         for (var raw in lines) {
           final w = raw.trim();
           if (w.isEmpty) continue;
           final up = w.toUpperCase();
           if (_isValidWordleWord(up)) {
-            words.add(up);
+            _allowed.add(up);
+            addedCount++;
           }
         }
-        print('Получено ${words.length} слов из API');
-        if (words.isNotEmpty) {
-          _allowed = words;
-          _answers = words.toList();
+
+        print('Добавлено $addedCount новых слов из API');
+
+        if (addedCount > 0) {
           return true;
         }
-        print('API вернул пустой список слов');
+        print('API не вернул новых слов');
       } else {
         print('Ошибка API: статус ${resp.statusCode}');
       }
@@ -108,11 +132,27 @@ class WordsApiService {
     return false;
   }
 
+  static Future<bool> _loadFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedAllowed = prefs.getStringList('w_allowed_v3');
+
+      if (cachedAllowed != null && cachedAllowed.isNotEmpty) {
+        _allowed = cachedAllowed.toSet();
+        // Убеждаемся что все слова-ответы включены
+        _allowed.addAll(_answers);
+        return true;
+      }
+    } catch (e) {
+      print('Ошибка загрузки из кэша: $e');
+    }
+    return false;
+  }
+
   static void _cacheWords() {
     SharedPreferences.getInstance().then((prefs) {
       prefs.setStringList('w_allowed_v3', _allowed.toList());
-      prefs.setStringList('w_answers_v3', _answers);
-      print('Словарь закэширован');
+      print('Словарь закэширован: ${_allowed.length} слов');
     }).catchError((e) {
       print('Ошибка кэширования: $e');
     });
@@ -142,7 +182,6 @@ class WordsApiService {
   static Future<void> forceRefresh() async {
     _initialized = false;
     _allowed = {};
-    _answers = [];
     await initialize();
   }
 }
