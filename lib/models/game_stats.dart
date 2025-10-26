@@ -3,7 +3,7 @@ class GameStats {
   int gamesWon;
   int currentStreak;
   int maxStreak;
-  Map<int, int> guessDistribution; // попытка -> количество побед
+  Map<int, int> guessDistribution;
   DateTime? lastPlayedDate;
   String deviceId;
   DateTime lastSyncTime;
@@ -25,7 +25,6 @@ class GameStats {
     return (gamesWon / gamesPlayed * 100);
   }
 
-  // Обновление статистики после игры
   void recordGame({required bool won, required int attempts}) {
     gamesPlayed++;
     lastPlayedDate = DateTime.now();

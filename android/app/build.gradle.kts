@@ -13,6 +13,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // Добавляем аргумент компилятора для диагностики deprecated API
+        compilerArgs.add("-Xlint:deprecation")
     }
 
     kotlinOptions {
@@ -20,7 +22,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.wordle_ru"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
@@ -30,8 +31,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -42,8 +41,8 @@ flutter {
 }
 
 dependencies {
-    implementation platform('com.google.firebase:firebase-bom:34.4.0')
-    implementation 'com.google.firebase:firebase-database'
-    implementation 'com.google.firebase:firebase-auth'
-    implementation 'com.google.firebase:firebase-analytics'
+    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-analytics")
 }

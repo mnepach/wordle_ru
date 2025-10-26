@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
 import 'dart:io';
-
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,27 +20,20 @@ class WordsApiService {
     'РЫБКА', 'ЗАМОК', 'ОЗЕРО', 'БАНКА', 'МЫШКА'
   ];
   static Set<String> _allowed = {};
-
-  static const _wordleRussianRaw =
-      'https://raw.githubusercontent.com/mediahope/Wordle-Russian-Dictionary/main/Russian.txt';
+  static const _wordleRussianRaw = 'https://raw.githubusercontent.com/mediahope/Wordle-Russian-Dictionary/main/Russian.txt';
 
   static Future<void> initialize() async {
     if (_initialized) return;
-
     print('Инициализация словаря...');
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedAllowed = prefs.getStringList('w_allowed_v3');
-
-      if (cachedAllowed != null && cachedAllowed.isNotEmpty) {
-        _allowed = cachedAllowed.map((w) => w.toUpperCase()).toSet();
-        print('Загружено ${_allowed.length} слов из кэша');
+      print('Пытаемся загрузить из API...');
+      final loaded = await _tryLoadFromWordleApi();
+      if (loaded && _allowed.isNotEmpty) {
+        print('Загружено ${_allowed.length} слов из API');
+        _cacheWords();
         _initialized = true;
         return;
       }
-
-      // Пробуем загрузить из assets
       try {
         print('Пытаемся загрузить из assets...');
         final allowedAsset = await rootBundle.loadString('assets/words/answers.txt');
@@ -51,7 +43,6 @@ class WordsApiService {
             .map((s) => s.toUpperCase())
             .where((w) => _isValidWordleWord(w))
             .toSet();
-
         if (allowed.isNotEmpty) {
           _allowed = allowed;
           print('Загружено ${_allowed.length} слов из assets');
@@ -62,27 +53,17 @@ class WordsApiService {
       } catch (e) {
         print('Не удалось загрузить из assets: $e');
       }
-
-      // Пробуем загрузить из API
-      print('Пытаемся загрузить из API...');
-      final loaded = await _tryLoadFromWordleApi();
-      if (loaded && _allowed.isNotEmpty) {
-        print('Загружено ${_allowed.length} слов из API');
-        _cacheWords();
-      } else {
-        // Используем встроенный список слов как fallback
-        print('Используем встроенный список слов (${_answers.length} слов)');
-        _allowed = Set<String>.from(_answers);
-        _cacheWords();
-      }
+      print('Используем встроенный список слов (${_answers.length} слов)');
+      _allowed = Set<String>.from(_answers);
+      _cacheWords();
+      _initialized = true;
     } catch (e) {
       print('Ошибка инициализации словаря: $e');
-      // В случае ошибки используем встроенный список
       _allowed = Set<String>.from(_answers);
-    } finally {
+      _cacheWords();
       _initialized = true;
-      print('Словарь инициализирован. Доступно слов: ${_allowed.length}');
     }
+    print('Словарь инициализирован. Доступно слов: ${_allowed.length}');
   }
 
   static bool _isValidWordleWord(String word) {
@@ -93,7 +74,9 @@ class WordsApiService {
 
   static Future<bool> _tryLoadFromWordleApi() async {
     try {
-      final resp = await http.get(Uri.parse(_wordleRussianRaw)).timeout(const Duration(seconds: 8));
+      print('Отправляем запрос к $_wordleRussianRaw');
+      final resp = await http.get(Uri.parse(_wordleRussianRaw)).timeout(const Duration(seconds: 15));
+      print('Статус ответа: ${resp.statusCode}');
       if (resp.statusCode == 200) {
         final lines = LineSplitter.split(resp.body);
         final Set<String> words = {};
@@ -105,10 +88,15 @@ class WordsApiService {
             words.add(up);
           }
         }
+        print('Получено ${words.length} слов из API');
         if (words.isNotEmpty) {
           _allowed = words;
+          _answers = words.toList();
           return true;
         }
+        print('API вернул пустой список слов');
+      } else {
+        print('Ошибка API: статус ${resp.statusCode}');
       }
     } on TimeoutException catch (_) {
       print('Timeout при загрузке словаря из API');
@@ -154,6 +142,7 @@ class WordsApiService {
   static Future<void> forceRefresh() async {
     _initialized = false;
     _allowed = {};
+    _answers = [];
     await initialize();
   }
 }

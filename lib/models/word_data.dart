@@ -1,4 +1,3 @@
-// Статусы
 enum LetterStatus {
   empty,    // Пустая клетка
   notChecked, // Введена, но еще не проверена
@@ -45,7 +44,6 @@ class WordRow {
     return letters.map((l) => l.character).join();
   }
 
-  // заполнена ли строка проверка
   bool isFilled() {
     return letters.every((letter) => letter.character.isNotEmpty);
   }
