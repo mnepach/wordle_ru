@@ -30,7 +30,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _headerAnimationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
-    )..repeat(reverse: true);
+    )
+      ..repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
@@ -53,7 +54,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _startNewGame() {
+  void _startNewGame() async {
+    // Синхронизируем статистику перед началом новой игры
+    print('🎮 Начинаем новую игру - синхронизируем статистику...');
+
+    try {
+      await StatsService.syncNow();
+      print('✅ Синхронизация завершена, начинаем новую игру');
+    } catch (e) {
+      print('⚠️ Ошибка синхронизации: $e');
+    }
+
     setState(() {
       _gameService = GameService(targetWord: WordsApiService.getRandomWord());
     });
@@ -151,165 +162,173 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
-        ),
-        backgroundColor: Colors.white,
-        child: Container(
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.gradientStart, AppColors.gradientEnd],
+      builder: (context) =>
+          Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _gameService.isWinner ? '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧' : '(╥﹏╥)',
-                style: const TextStyle(fontSize: 48),
+            backgroundColor: Colors.white,
+            child: Container(
+              padding: const EdgeInsets.all(30),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                ),
               ),
-              const SizedBox(height: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _gameService.isWinner ? '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧' : '(╥﹏╥)',
+                    style: const TextStyle(fontSize: 48),
+                  ),
+                  const SizedBox(height: 16),
 
-              Text(
-                _gameService.isWinner ? 'Победа!' : 'Игра окончена',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.text,
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (!_gameService.isWinner) ...[
-                const Text(
-                  'Загаданное слово:',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: AppColors.text,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.shadow,
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    _gameService.targetWord,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 4,
-                      color: AppColors.text,
-                    ),
-                  ),
-                ),
-              ] else ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.shadow,
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    'Отгадано за ${_gameService.currentRowIndex + 1} ${_getPluralAttempts(_gameService.currentRowIndex + 1)}! ٩(◕‿◕｡)۶',
+                  Text(
+                    _gameService.isWinner ? 'Победа!' : 'Игра окончена',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
                       color: AppColors.text,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ],
-              const SizedBox(height: 24),
-              // Кнопки
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const StatsScreen(),
+                  const SizedBox(height: 20),
+                  if (!_gameService.isWinner) ...[
+                    const Text(
+                      'Загаданное слово:',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadow,
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        _gameService.targetWord,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 4,
+                          color: AppColors.text,
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      elevation: 5,
-                    ),
-                    icon: const Icon(Icons.bar_chart, size: 20),
-                    label: const Text(
-                      'Статистика',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _startNewGame();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
+                  ] else
+                    ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.shadow,
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          'Отгадано за ${_gameService.currentRowIndex +
+                              1} ${_getPluralAttempts(
+                              _gameService.currentRowIndex + 1)}! ٩(◕‿◕｡)۶',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                      elevation: 5,
-                    ),
-                    icon: const Icon(Icons.refresh, size: 20),
-                    label: const Text(
-                      'Новая игра',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    ],
+                  const SizedBox(height: 24),
+                  // Кнопки
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const StatsScreen(),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 5,
+                        ),
+                        icon: const Icon(Icons.bar_chart, size: 20),
+                        label: const Text(
+                          'Статистика',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _startNewGame();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 5,
+                        ),
+                        icon: const Icon(Icons.refresh, size: 20),
+                        label: const Text(
+                          'Новая игра',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
   String _getPluralAttempts(int count) {
     if (count % 10 == 1 && count % 100 != 11) {
       return 'попытку';
-    } else if ([2, 3, 4].contains(count % 10) && ![12, 13, 14].contains(count % 100)) {
+    } else
+    if ([2, 3, 4].contains(count % 10) && ![12, 13, 14].contains(count % 100)) {
       return 'попытки';
     } else {
       return 'попыток';
@@ -352,8 +371,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           child: Stack(
             children: [
               const FloatingCharacter(startPosition: Alignment.bottomLeft),
-              const FloatingCharacter(startPosition: Alignment.bottomRight, delay: 1.5),
-              const FloatingCharacter(startPosition: Alignment.centerLeft, delay: 3.0),
+              const FloatingCharacter(
+                  startPosition: Alignment.bottomRight, delay: 1.5),
+              const FloatingCharacter(
+                  startPosition: Alignment.centerLeft, delay: 3.0),
 
               SafeArea(
                 child: GestureDetector(
@@ -437,7 +458,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   child: Transform.rotate(
                     angle: 0.3,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(6),
@@ -490,75 +512,80 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _showHelpDialog() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.gradientStart, AppColors.gradientEnd],
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Как играть (◕‿◕)',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.text,
+      builder: (context) =>
+          Dialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30)),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Угадайте слово за 6 попыток!\n\nКаждая попытка должна быть существующим словом из 5 букв.\n\nЦвет плиток показывает насколько вы близки:',
-                style: TextStyle(fontSize: 15, color: AppColors.text, height: 1.5),
-              ),
-              const SizedBox(height: 20),
-              _HelpExample(
-                letter: 'П',
-                color: AppColors.correct,
-                description: 'Буква на своём месте ♪(´▽｀)',
-              ),
-              const SizedBox(height: 12),
-              _HelpExample(
-                letter: 'О',
-                color: AppColors.present,
-                description: 'Буква есть, но не здесь',
-              ),
-              const SizedBox(height: 12),
-              _HelpExample(
-                letter: 'Т',
-                color: AppColors.absent,
-                description: 'Буквы нет в слове (｡•́︿•̀｡)',
-              ),
-              const SizedBox(height: 24),
-              Center(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Как играть (◕‿◕)',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.text,
                     ),
                   ),
-                  child: const Text(
-                    'Понятно! (｡♥‿♥｡)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Угадайте слово за 6 попыток!\n\nКаждая попытка должна быть существующим словом из 5 букв.\n\nЦвет плиток показывает насколько вы близки:',
+                    style: TextStyle(
+                        fontSize: 15, color: AppColors.text, height: 1.5),
                   ),
-                ),
+                  const SizedBox(height: 20),
+                  _HelpExample(
+                    letter: 'П',
+                    color: AppColors.correct,
+                    description: 'Буква на своём месте ♪(´▽｀)',
+                  ),
+                  const SizedBox(height: 12),
+                  _HelpExample(
+                    letter: 'О',
+                    color: AppColors.present,
+                    description: 'Буква есть, но не здесь',
+                  ),
+                  const SizedBox(height: 12),
+                  _HelpExample(
+                    letter: 'Т',
+                    color: AppColors.absent,
+                    description: 'Буквы нет в слове (｡•́︿•̀｡)',
+                  ),
+                  const SizedBox(height: 24),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text(
+                        'Понятно! (｡♥‿♥｡)',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -570,34 +597,40 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-        title: const Text(
-          'Новая игра? (・・？)',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.text),
-        ),
-        content: const Text(
-          'Текущий прогресс будет потерян.',
-          style: TextStyle(color: AppColors.text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Отмена', style: TextStyle(color: AppColors.text)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _startNewGame();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      builder: (context) =>
+          AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25)),
+            title: const Text(
+              'Новая игра? (・・？)',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: AppColors.text),
             ),
-            child: const Text('Начать', style: TextStyle(color: Colors.white)),
+            content: const Text(
+              'Текущий прогресс будет потерян.',
+              style: TextStyle(color: AppColors.text),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(
+                    'Отмена', style: TextStyle(color: AppColors.text)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _startNewGame(); // Здесь будет синхронизация
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15)),
+                ),
+                child: const Text(
+                    'Начать', style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }

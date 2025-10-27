@@ -57,13 +57,15 @@ class StatsService {
       try {
         final decoded = json.decode(statsJson);
         _cachedStats = GameStats.fromJson(decoded);
+        print('📊 Загружена статистика: ${_cachedStats!.gamesPlayed} игр');
         return _cachedStats!;
       } catch (e) {
-        print('Ошибка загрузки статистики: $e');
+        print('❌ Ошибка загрузки статистики: $e');
       }
     }
 
     _cachedStats = GameStats(deviceId: deviceId);
+    print('📊 Создана новая статистика');
     return _cachedStats!;
   }
 
@@ -73,19 +75,32 @@ class StatsService {
     final prefs = await SharedPreferences.getInstance();
     final statsJson = json.encode(stats.toJson());
     await prefs.setString(_statsKey, statsJson);
+    print('💾 Статистика сохранена локально');
   }
 
-  // Записать результат игры (с автоматической синхронизацией)
-  static Future<void> recordGame({required bool won, required int attempts}) async {
+  // Записать результат игры (с ручной синхронизацией)
+  static Future<void> recordGame({
+    required bool won,
+    required int attempts,
+  }) async {
     final stats = await loadStats();
     stats.recordGame(won: won, attempts: attempts);
     await saveStats(stats);
 
-    // Автоматически синхронизируем с облаком
+    print('🎮 Результат игры записан: ${won ? "победа" : "поражение"} за $attempts попыток');
+
+    // Синхронизация происходит ТОЛЬКО при нажатии "Новая игра"
+    // Здесь ничего не делаем
+  }
+
+  // Ручная синхронизация - вызывается при нажатии "Новая игра"
+  static Future<void> syncNow() async {
     try {
+      print('🔄 Начинаем синхронизацию при новой игре...');
       await SyncService().syncAfterGame();
+      print('✅ Синхронизация завершена');
     } catch (e) {
-      print('Ошибка синхронизации после игры: $e');
+      print('⚠️ Ошибка синхронизации: $e');
       // Продолжаем работу даже если синхронизация не удалась
     }
   }
@@ -100,7 +115,7 @@ class StatsService {
     try {
       await SyncService().syncAfterGame();
     } catch (e) {
-      print('Ошибка синхронизации после сброса: $e');
+      print('❌ Ошибка синхронизации после сброса: $e');
     }
   }
 

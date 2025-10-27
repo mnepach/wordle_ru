@@ -3,10 +3,8 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
 import '../models/game_stats.dart';
 import 'stats_service.dart';
-import 'firebase_rest_service.dart';
 
 enum SyncStatus {
   idle,
@@ -33,295 +31,185 @@ class SyncService {
   SyncStatus _currentStatus = SyncStatus.idle;
   SyncStatus get currentStatus => _currentStatus;
 
-  Timer? _autoSyncTimer;
   DateTime? _lastSyncTime;
 
-  bool get _isWindows => !kIsWeb && Platform.isWindows;
-  bool get _useRestApi => _isWindows || kIsWeb;
-
+  // Инициализация - только один раз при старте приложения
   Future<void> initialize() async {
     try {
       _updateStatus(SyncStatus.syncing);
 
-      if (!_useRestApi) {
-        _database = FirebaseDatabase.instanceFor(
-          app: _auth.app,
-          databaseURL: 'https://wordle-ru-f1f08-default-rtdb.firebaseio.com',
-        );
-      }
+      // Инициализируем Firebase Database
+      _database = FirebaseDatabase.instance;
+      _database!.databaseURL = 'https://wordle-ru-f1f08-default-rtdb.firebaseio.com';
 
+      // Получаем или создаем User ID
       _userId = await _getOrCreateUserId();
 
       if (_userId == null || _userId!.isEmpty) {
         throw Exception('Не удалось получить User ID');
       }
 
-      print('Используем User ID: $_userId');
+      print('✅ Sync Service инициализирован. User ID: $_userId');
 
-      await _checkConnection();
-      await _loadFromCloud();
-
-      if (!_useRestApi) {
-        _subscribeToChanges();
-      }
-
-      _startAutoSync();
+      // Подписываемся на изменения в реальном времени
+      _subscribeToChanges();
 
       _updateStatus(SyncStatus.synced);
     } catch (e) {
-      print('Ошибка инициализации синхронизации: $e');
+      print('❌ Ошибка инициализации синхронизации: $e');
       _updateStatus(SyncStatus.offline);
     }
   }
 
+  // Получение или создание User ID
   Future<String> _getOrCreateUserId() async {
     final prefs = await SharedPreferences.getInstance();
     String? userId = prefs.getString('cloud_user_id');
 
     if (userId == null || userId.isEmpty) {
       try {
+        // Анонимный вход в Firebase Auth
         final userCredential = await _auth.signInAnonymously();
         final firebaseUid = userCredential.user?.uid;
 
         if (firebaseUid != null && firebaseUid.isNotEmpty) {
-          userId = _createSafeUserId(firebaseUid);
+          userId = firebaseUid;
           await prefs.setString('cloud_user_id', userId);
-          await prefs.setString('original_firebase_uid', firebaseUid);
-          print('Создан новый пользователь Firebase: $userId (из $firebaseUid)');
-          return userId;
+          print('✅ Создан новый User ID: $userId');
         } else {
           throw Exception('Firebase вернул пустой UID');
         }
       } catch (e) {
-        print('Ошибка создания Firebase пользователя: $e');
-        userId = _generateFallbackUserId();
+        print('❌ Ошибка создания пользователя: $e');
+        // Создаём fallback ID
+        userId = 'local_${DateTime.now().millisecondsSinceEpoch}';
         await prefs.setString('cloud_user_id', userId);
-        print('Создан локальный fallback ID: $userId');
-      }
-    } else {
-      print('Используем существующий ID: $userId');
-
-      if (!_isValidFirebasePath(userId)) {
-        print('ID содержит недопустимые символы, создаём новый');
-        userId = _generateFallbackUserId();
-        await prefs.setString('cloud_user_id', userId);
-      }
-
-      try {
-        if (_auth.currentUser == null) {
-          await _auth.signInAnonymously();
-        }
-      } catch (e) {
-        print('Не удалось восстановить сессию: $e');
+        print('⚠️ Создан локальный ID: $userId');
       }
     }
 
     return userId!;
   }
 
-  String _createSafeUserId(String firebaseUid) {
-    final safe = firebaseUid
-        .substring(0, firebaseUid.length > 20 ? 20 : firebaseUid.length)
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-
-    if (safe.isEmpty) {
-      return _generateFallbackUserId();
-    }
-
-    return 'u$safe';
-  }
-
-  String _generateFallbackUserId() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = (timestamp % 999999).toString().padLeft(6, '0');
-    return 'u${timestamp}r$random';
-  }
-
-  bool _isValidFirebasePath(String path) {
-    final invalidChars = RegExp(r'[\.\$#\[\]/]');
-    return !invalidChars.hasMatch(path) && path.isNotEmpty;
-  }
-
-  Future<void> _checkConnection() async {
-    try {
-      if (_useRestApi) {
-        final connected = await FirebaseRestService.checkConnection();
-        if (!connected) {
-          throw Exception('Нет подключения к Firebase');
-        }
-        print('REST API подключение успешно');
-      } else {
-        final connectedRef = _database!.ref('.info/connected');
-        final snapshot = await connectedRef.get().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => throw TimeoutException('Timeout при подключении к Firebase'),
-        );
-
-        if (snapshot.value != true) {
-          throw Exception('Нет подключения к Firebase');
-        }
-        print('Firebase Database подключение успешно');
-      }
-    } catch (e) {
-      throw Exception('Ошибка подключения: $e');
-    }
-  }
-
-  Future<void> _loadFromCloud() async {
-    if (_userId == null || _userId!.isEmpty) {
-      throw Exception('User ID не инициализирован');
-    }
-
-    try {
-      print('Загружаем данные для пользователя: $_userId');
-
-      Map<String, dynamic>? cloudData;
-
-      if (_useRestApi) {
-        cloudData = await FirebaseRestService.getData(_userId!);
-      } else {
-        final ref = _database!.ref('users/$_userId/stats');
-        final snapshot = await ref.get().timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => throw TimeoutException('Timeout при загрузке данных'),
-        );
-
-        if (snapshot.exists && snapshot.value is Map) {
-          cloudData = Map<String, dynamic>.from(snapshot.value as Map);
-        }
-      }
-
-      if (cloudData != null) {
-        print('Найдены данные в облаке');
-        final cloudStats = GameStats.fromJson(cloudData);
-        final localStats = await StatsService.loadStats();
-
-        if (cloudStats.lastSyncTime.isAfter(localStats.lastSyncTime)) {
-          print('Облачные данные новее, применяем их');
-          final mergedStats = localStats.mergeWith(cloudStats);
-          await StatsService.saveStats(mergedStats);
-        } else if (localStats.lastSyncTime.isAfter(cloudStats.lastSyncTime)) {
-          print('Локальные данные новее, загружаем в облако');
-          await _uploadToCloud(localStats);
-        } else {
-          print('Данные синхронизированы');
-        }
-      } else {
-        print('Данных в облаке нет, загружаем локальные');
-        final localStats = await StatsService.loadStats();
-        await _uploadToCloud(localStats);
-      }
-
-      _lastSyncTime = DateTime.now();
-    } catch (e) {
-      print('Ошибка загрузки из облака: $e');
-      throw e;
-    }
-  }
-
-  Future<void> _uploadToCloud(GameStats stats) async {
-    if (_userId == null || _userId!.isEmpty) {
-      throw Exception('User ID не инициализирован');
-    }
-
-    try {
-      print('Загружаем данные в облако для пользователя: $_userId');
-
-      final updatedStats = stats.copyWith(lastSyncTime: DateTime.now());
-      bool success;
-
-      if (_useRestApi) {
-        success = await FirebaseRestService.setData(_userId!, updatedStats);
-      } else {
-        final ref = _database!.ref('users/$_userId/stats');
-        await ref.set(updatedStats.toJson()).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => throw TimeoutException('Timeout при загрузке данных'),
-        );
-        success = true;
-      }
-
-      if (success) {
-        _lastSyncTime = DateTime.now();
-        print('Данные успешно загружены в облако');
-      } else {
-        throw Exception('Не удалось сохранить данные');
-      }
-    } catch (e) {
-      print('Ошибка загрузки в облако: $e');
-      throw e;
-    }
-  }
-
+  // Подписка на изменения в реальном времени
   void _subscribeToChanges() {
-    if (_userId == null || _userId!.isEmpty || _database == null) {
-      print('Не удалось подписаться на изменения');
+    if (_userId == null || _database == null) {
+      print('❌ Не удалось подписаться: userId или database = null');
       return;
     }
 
-    final path = 'users/$_userId/stats';
-    print('Подписываемся на изменения в пути: $path');
-
-    final ref = _database!.ref(path);
+    final ref = _database!.ref('users/$_userId/stats');
+    print('📡 Подписываемся на: users/$_userId/stats');
 
     _statsSubscription = ref.onValue.listen((event) async {
-      if (event.snapshot.exists && event.snapshot.value is Map) {
+      if (event.snapshot.exists && event.snapshot.value != null) {
         try {
-          print('Получены изменения из облака');
-          final cloudData = Map<String, dynamic>.from(event.snapshot.value as Map);
+          print('📥 Получены изменения из облака');
+          final data = event.snapshot.value;
+
+          Map<String, dynamic> cloudData;
+          if (data is Map) {
+            cloudData = Map<String, dynamic>.from(data);
+          } else {
+            print('⚠️ Неожиданный формат данных: ${data.runtimeType}');
+            return;
+          }
+
           final cloudStats = GameStats.fromJson(cloudData);
           final localStats = await StatsService.loadStats();
 
+          // Применяем изменения только если облачные данные новее
           if (cloudStats.lastSyncTime.isAfter(localStats.lastSyncTime)) {
-            print('Применяем изменения из облака');
+            print('✅ Применяем изменения из облака');
             await StatsService.saveStats(cloudStats);
             _updateStatus(SyncStatus.synced);
           }
         } catch (e) {
-          print('Ошибка обработки изменений: $e');
+          print('❌ Ошибка обработки изменений: $e');
         }
       }
     }, onError: (error) {
-      print('Ошибка подписки: $error');
+      print('❌ Ошибка подписки: $error');
       _updateStatus(SyncStatus.error);
     });
   }
 
+  // Синхронизация после игры - вызывается вручную
   Future<void> syncAfterGame() async {
-    if (_userId == null) {
+    if (_userId == null || _database == null) {
+      print('⚠️ Синхронизация недоступна (offline)');
       _updateStatus(SyncStatus.offline);
       return;
     }
 
     try {
       _updateStatus(SyncStatus.syncing);
+      print('📤 Начинаем синхронизацию...');
+
       final stats = await StatsService.loadStats();
-      await _uploadToCloud(stats);
+      final updatedStats = stats.copyWith(lastSyncTime: DateTime.now());
+
+      final ref = _database!.ref('users/$_userId/stats');
+      await ref.set(updatedStats.toJson());
+
+      _lastSyncTime = DateTime.now();
+      print('✅ Синхронизация завершена');
       _updateStatus(SyncStatus.synced);
     } catch (e) {
-      print('Ошибка синхронизации: $e');
+      print('❌ Ошибка синхронизации: $e');
       _updateStatus(SyncStatus.error);
+      rethrow;
     }
   }
 
+  // Принудительная синхронизация - загружаем из облака
   Future<void> forceSync() async {
+    if (_userId == null || _database == null) {
+      print('⚠️ Принудительная синхронизация недоступна');
+      _updateStatus(SyncStatus.offline);
+      return;
+    }
+
     try {
       _updateStatus(SyncStatus.syncing);
-      await _loadFromCloud();
+      print('🔄 Принудительная синхронизация...');
+
+      final ref = _database!.ref('users/$_userId/stats');
+      final snapshot = await ref.get();
+
+      if (snapshot.exists && snapshot.value != null) {
+        final data = snapshot.value;
+        Map<String, dynamic> cloudData;
+
+        if (data is Map) {
+          cloudData = Map<String, dynamic>.from(data);
+        } else {
+          throw Exception('Неожиданный формат данных');
+        }
+
+        final cloudStats = GameStats.fromJson(cloudData);
+        final localStats = await StatsService.loadStats();
+
+        // Объединяем данные
+        final mergedStats = localStats.mergeWith(cloudStats);
+        await StatsService.saveStats(mergedStats);
+
+        // Загружаем обратно в облако
+        await ref.set(mergedStats.toJson());
+
+        _lastSyncTime = DateTime.now();
+        print('✅ Принудительная синхронизация завершена');
+      } else {
+        print('⚠️ Данных в облаке нет, загружаем локальные');
+        await syncAfterGame();
+      }
+
       _updateStatus(SyncStatus.synced);
     } catch (e) {
-      print('Ошибка принудительной синхронизации: $e');
+      print('❌ Ошибка принудительной синхронизации: $e');
       _updateStatus(SyncStatus.error);
+      rethrow;
     }
-  }
-
-  void _startAutoSync() {
-    _autoSyncTimer?.cancel();
-    _autoSyncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
-      if (_currentStatus != SyncStatus.syncing) {
-        await forceSync();
-      }
-    });
   }
 
   void _updateStatus(SyncStatus status) {
@@ -332,29 +220,6 @@ class SyncService {
   Future<String?> getUserId() async => _userId;
 
   DateTime? getLastSyncTime() => _lastSyncTime;
-
-  Future<void> reset() async {
-    await dispose();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('cloud_user_id');
-    await prefs.remove('original_firebase_uid');
-    await initialize();
-  }
-
-  Future<void> dispose() async {
-    _autoSyncTimer?.cancel();
-    await _statsSubscription?.cancel();
-    await _syncStatusController.close();
-  }
-
-  Future<bool> isCloudAvailable() async {
-    try {
-      await _checkConnection();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
 
   String getSyncInfo() {
     switch (_currentStatus) {
@@ -379,5 +244,10 @@ class SyncService {
       case SyncStatus.offline:
         return 'Оффлайн режим';
     }
+  }
+
+  Future<void> dispose() async {
+    await _statsSubscription?.cancel();
+    await _syncStatusController.close();
   }
 }
