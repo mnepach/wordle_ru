@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/game_stats.dart';
 import 'stats_service.dart';
 
@@ -33,16 +32,14 @@ class SyncService {
 
   DateTime? _lastSyncTime;
 
-  // Инициализация - только один раз при старте приложения
+  // Инициализация
   Future<void> initialize() async {
     try {
       _updateStatus(SyncStatus.syncing);
 
-      // Инициализируем Firebase Database
       _database = FirebaseDatabase.instance;
       _database!.databaseURL = 'https://wordle-ru-f1f08-default-rtdb.firebaseio.com';
 
-      // Получаем или создаем User ID
       _userId = await _getOrCreateUserId();
 
       if (_userId == null || _userId!.isEmpty) {
@@ -51,9 +48,7 @@ class SyncService {
 
       print('✅ Sync Service инициализирован. User ID: $_userId');
 
-      // Подписываемся на изменения в реальном времени
       _subscribeToChanges();
-
       _updateStatus(SyncStatus.synced);
     } catch (e) {
       print('❌ Ошибка инициализации синхронизации: $e');
@@ -68,12 +63,10 @@ class SyncService {
 
     if (userId == null || userId.isEmpty) {
       try {
-        // Анонимный вход в Firebase Auth
         final userCredential = await _auth.signInAnonymously();
-        final firebaseUid = userCredential.user?.uid;
+        userId = userCredential.user?.uid;
 
-        if (firebaseUid != null && firebaseUid.isNotEmpty) {
-          userId = firebaseUid;
+        if (userId != null && userId.isNotEmpty) {
           await prefs.setString('cloud_user_id', userId);
           print('✅ Создан новый User ID: $userId');
         } else {
@@ -81,7 +74,6 @@ class SyncService {
         }
       } catch (e) {
         print('❌ Ошибка создания пользователя: $e');
-        // Создаём fallback ID
         userId = 'local_${DateTime.now().millisecondsSinceEpoch}';
         await prefs.setString('cloud_user_id', userId);
         print('⚠️ Создан локальный ID: $userId');
@@ -93,10 +85,7 @@ class SyncService {
 
   // Подписка на изменения в реальном времени
   void _subscribeToChanges() {
-    if (_userId == null || _database == null) {
-      print('❌ Не удалось подписаться: userId или database = null');
-      return;
-    }
+    if (_userId == null || _database == null) return;
 
     final ref = _database!.ref('users/$_userId/stats');
     print('📡 Подписываемся на: users/$_userId/stats');
@@ -118,7 +107,6 @@ class SyncService {
           final cloudStats = GameStats.fromJson(cloudData);
           final localStats = await StatsService.loadStats();
 
-          // Применяем изменения только если облачные данные новее
           if (cloudStats.lastSyncTime.isAfter(localStats.lastSyncTime)) {
             print('✅ Применяем изменения из облака');
             await StatsService.saveStats(cloudStats);
@@ -126,6 +114,7 @@ class SyncService {
           }
         } catch (e) {
           print('❌ Ошибка обработки изменений: $e');
+          print('Stack trace: ${StackTrace.current}');
         }
       }
     }, onError: (error) {
@@ -134,7 +123,7 @@ class SyncService {
     });
   }
 
-  // Синхронизация после игры - вызывается вручную
+  // Синхронизация после игры
   Future<void> syncAfterGame() async {
     if (_userId == null || _database == null) {
       print('⚠️ Синхронизация недоступна (offline)');
@@ -157,12 +146,13 @@ class SyncService {
       _updateStatus(SyncStatus.synced);
     } catch (e) {
       print('❌ Ошибка синхронизации: $e');
+      print('Stack trace: ${StackTrace.current}');
       _updateStatus(SyncStatus.error);
       rethrow;
     }
   }
 
-  // Принудительная синхронизация - загружаем из облака
+  // Принудительная синхронизация
   Future<void> forceSync() async {
     if (_userId == null || _database == null) {
       print('⚠️ Принудительная синхронизация недоступна');
@@ -184,17 +174,15 @@ class SyncService {
         if (data is Map) {
           cloudData = Map<String, dynamic>.from(data);
         } else {
-          throw Exception('Неожиданный формат данных');
+          throw Exception('Неожиданный формат данных: ${data.runtimeType}');
         }
 
         final cloudStats = GameStats.fromJson(cloudData);
         final localStats = await StatsService.loadStats();
 
-        // Объединяем данные
         final mergedStats = localStats.mergeWith(cloudStats);
         await StatsService.saveStats(mergedStats);
 
-        // Загружаем обратно в облако
         await ref.set(mergedStats.toJson());
 
         _lastSyncTime = DateTime.now();
@@ -207,6 +195,7 @@ class SyncService {
       _updateStatus(SyncStatus.synced);
     } catch (e) {
       print('❌ Ошибка принудительной синхронизации: $e');
+      print('Stack trace: ${StackTrace.current}');
       _updateStatus(SyncStatus.error);
       rethrow;
     }
@@ -218,8 +207,6 @@ class SyncService {
   }
 
   Future<String?> getUserId() async => _userId;
-
-  DateTime? getLastSyncTime() => _lastSyncTime;
 
   String getSyncInfo() {
     switch (_currentStatus) {

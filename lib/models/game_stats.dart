@@ -43,39 +43,64 @@ class GameStats {
     }
   }
 
-  // Конвертация в JSON для сохранения
+  // Конвертация в JSON для Firebase (массив вместо Map для guessDistribution)
   Map<String, dynamic> toJson() {
+    // Преобразуем Map<int, int> в List<int> для Firebase
+    final distributionList = [
+      guessDistribution[1] ?? 0,
+      guessDistribution[2] ?? 0,
+      guessDistribution[3] ?? 0,
+      guessDistribution[4] ?? 0,
+      guessDistribution[5] ?? 0,
+      guessDistribution[6] ?? 0,
+    ];
+
     return {
       'gamesPlayed': gamesPlayed,
       'gamesWon': gamesWon,
       'currentStreak': currentStreak,
       'maxStreak': maxStreak,
-      'guessDistribution': guessDistribution,
+      'guessDistribution': distributionList, // Массив вместо Map
       'lastPlayedDate': lastPlayedDate?.toIso8601String(),
       'deviceId': deviceId,
       'lastSyncTime': lastSyncTime.toIso8601String(),
     };
   }
 
-  // Создание из JSON
+  // Создание из JSON (поддержка и Map, и List)
   factory GameStats.fromJson(Map<String, dynamic> json) {
+    // Обрабатываем guessDistribution - может быть Map или List
+    Map<int, int> distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
+
+    final distData = json['guessDistribution'];
+
+    if (distData is List) {
+      // Если пришёл массив из Firebase
+      for (int i = 0; i < distData.length && i < 6; i++) {
+        distribution[i + 1] = (distData[i] as num?)?.toInt() ?? 0;
+      }
+    } else if (distData is Map) {
+      // Если пришёл Map (старый формат или локальное хранилище)
+      distData.forEach((key, value) {
+        final intKey = int.tryParse(key.toString());
+        if (intKey != null && intKey >= 1 && intKey <= 6) {
+          distribution[intKey] = (value as num?)?.toInt() ?? 0;
+        }
+      });
+    }
+
     return GameStats(
-      gamesPlayed: json['gamesPlayed'] ?? 0,
-      gamesWon: json['gamesWon'] ?? 0,
-      currentStreak: json['currentStreak'] ?? 0,
-      maxStreak: json['maxStreak'] ?? 0,
-      guessDistribution: Map<int, int>.from(
-        (json['guessDistribution'] as Map<dynamic, dynamic>?)?.map(
-              (k, v) => MapEntry(int.parse(k.toString()), v as int),
-        ) ??
-            {},
-      ),
+      gamesPlayed: (json['gamesPlayed'] as num?)?.toInt() ?? 0,
+      gamesWon: (json['gamesWon'] as num?)?.toInt() ?? 0,
+      currentStreak: (json['currentStreak'] as num?)?.toInt() ?? 0,
+      maxStreak: (json['maxStreak'] as num?)?.toInt() ?? 0,
+      guessDistribution: distribution,
       lastPlayedDate: json['lastPlayedDate'] != null
-          ? DateTime.parse(json['lastPlayedDate'])
+          ? DateTime.tryParse(json['lastPlayedDate'].toString())
           : null,
-      deviceId: json['deviceId'] ?? '',
+      deviceId: json['deviceId']?.toString() ?? '',
       lastSyncTime: json['lastSyncTime'] != null
-          ? DateTime.parse(json['lastSyncTime'])
+          ? DateTime.tryParse(json['lastSyncTime'].toString()) ?? DateTime.now()
           : DateTime.now(),
     );
   }
@@ -85,21 +110,35 @@ class GameStats {
     return GameStats(
       gamesPlayed: gamesPlayed + other.gamesPlayed,
       gamesWon: gamesWon + other.gamesWon,
-      currentStreak: lastPlayedDate != null &&
-          other.lastPlayedDate != null &&
-          lastPlayedDate!.isAfter(other.lastPlayedDate!)
-          ? currentStreak
-          : other.currentStreak,
+      currentStreak: _selectMoreRecent(
+        lastPlayedDate,
+        currentStreak,
+        other.lastPlayedDate,
+        other.currentStreak,
+      ),
       maxStreak: maxStreak > other.maxStreak ? maxStreak : other.maxStreak,
       guessDistribution: _mergeDistributions(guessDistribution, other.guessDistribution),
-      lastPlayedDate: lastPlayedDate != null &&
-          other.lastPlayedDate != null &&
-          lastPlayedDate!.isAfter(other.lastPlayedDate!)
-          ? lastPlayedDate
-          : other.lastPlayedDate,
+      lastPlayedDate: _selectMoreRecentDate(lastPlayedDate, other.lastPlayedDate),
       deviceId: deviceId,
       lastSyncTime: DateTime.now(),
     );
+  }
+
+  int _selectMoreRecent(
+      DateTime? date1,
+      int value1,
+      DateTime? date2,
+      int value2,
+      ) {
+    if (date1 == null) return value2;
+    if (date2 == null) return value1;
+    return date1.isAfter(date2) ? value1 : value2;
+  }
+
+  DateTime? _selectMoreRecentDate(DateTime? date1, DateTime? date2) {
+    if (date1 == null) return date2;
+    if (date2 == null) return date1;
+    return date1.isAfter(date2) ? date1 : date2;
   }
 
   static Map<int, int> _mergeDistributions(Map<int, int> a, Map<int, int> b) {
