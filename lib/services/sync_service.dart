@@ -227,7 +227,7 @@ class SyncService {
         }
         return 'Синхронизировано';
       case SyncStatus.error:
-        return 'Ошибка синхронизации';
+        return 'Ошибкаизации';
       case SyncStatus.offline:
         return 'Оффлайн режим';
     }
