@@ -40,7 +40,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   Future<void> _initializeGame() async {
     await WordsApiService.initialize();
-    await StatsService.loadStats(); // Загружаем статистику при старте
+    await StatsService.loadStats();
     setState(() {
       _gameService = GameService(targetWord: WordsApiService.getRandomWord());
       _isLoading = false;
@@ -55,10 +55,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   void _startNewGame() async {
-    // Синхронизируем статистику перед началом новой игры
     print('🎮 Начинаем новую игру - синхронизируем статистику...');
 
     try {
+      // ПРИНУДИТЕЛЬНАЯ СИНХРОНИЗАЦИЯ (СЛИЯНИЕ) ПЕРЕД НОВОЙ ИГРОЙ
       await StatsService.syncNow();
       print('✅ Синхронизация завершена, начинаем новую игру');
     } catch (e) {
@@ -120,8 +120,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     setState(() {
       if (_gameService.isGameOver) {
-        // Записываем результат игры в статистику
         final attempts = _gameService.currentRowIndex + 1;
+        // ЗАПИСЬ ИГРЫ И АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ
         StatsService.recordGame(
           won: _gameService.isWinner,
           attempts: attempts,
@@ -259,7 +259,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       ),
                     ],
                   const SizedBox(height: 24),
-                  // Кнопки
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -619,7 +618,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _startNewGame(); // Здесь будет синхронизация
+                  _startNewGame();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,

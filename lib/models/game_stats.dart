@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 class GameStats {
   int gamesPlayed;
   int gamesWon;
@@ -43,9 +45,7 @@ class GameStats {
     }
   }
 
-  // Конвертация в JSON для Firebase (массив вместо Map для guessDistribution)
   Map<String, dynamic> toJson() {
-    // Преобразуем Map<int, int> в List<int> для Firebase
     final distributionList = [
       guessDistribution[1] ?? 0,
       guessDistribution[2] ?? 0,
@@ -60,27 +60,22 @@ class GameStats {
       'gamesWon': gamesWon,
       'currentStreak': currentStreak,
       'maxStreak': maxStreak,
-      'guessDistribution': distributionList, // Массив вместо Map
+      'guessDistribution': distributionList,
       'lastPlayedDate': lastPlayedDate?.toIso8601String(),
       'deviceId': deviceId,
       'lastSyncTime': lastSyncTime.toIso8601String(),
     };
   }
 
-  // Создание из JSON (поддержка и Map, и List)
   factory GameStats.fromJson(Map<String, dynamic> json) {
-    // Обрабатываем guessDistribution - может быть Map или List
     Map<int, int> distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
-
     final distData = json['guessDistribution'];
 
     if (distData is List) {
-      // Если пришёл массив из Firebase
       for (int i = 0; i < distData.length && i < 6; i++) {
         distribution[i + 1] = (distData[i] as num?)?.toInt() ?? 0;
       }
     } else if (distData is Map) {
-      // Если пришёл Map (старый формат или локальное хранилище)
       distData.forEach((key, value) {
         final intKey = int.tryParse(key.toString());
         if (intKey != null && intKey >= 1 && intKey <= 6) {
@@ -105,11 +100,16 @@ class GameStats {
     );
   }
 
-  // Слияние статистики с другого устройства
   GameStats mergeWith(GameStats other) {
+    // ВАЖНОЕ ИСПРАВЛЕНИЕ: Используем максимальное значение для общего количества игр,
+    // чтобы избежать многократного сложения.
+    // Слияние статистики Wordle должно быть осторожным.
+
     return GameStats(
-      gamesPlayed: gamesPlayed + other.gamesPlayed,
-      gamesWon: gamesWon + other.gamesWon,
+      gamesPlayed: gamesPlayed > other.gamesPlayed ? gamesPlayed : other.gamesPlayed,
+      gamesWon: gamesWon > other.gamesWon ? gamesWon : other.gamesWon,
+
+      // Полоса побед зависит от последней игры, поэтому берем ту, которая связана с более поздней датой
       currentStreak: _selectMoreRecent(
         lastPlayedDate,
         currentStreak,
@@ -142,7 +142,7 @@ class GameStats {
   }
 
   static Map<int, int> _mergeDistributions(Map<int, int> a, Map<int, int> b) {
-    final merged = Map<int, int>.from(a);
+    final merged = HashMap<int, int>.from(a);
     b.forEach((key, value) {
       merged[key] = (merged[key] ?? 0) + value;
     });

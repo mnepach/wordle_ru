@@ -10,7 +10,6 @@ class StatsService {
   static const String _deviceIdKey = 'device_id_v1';
   static GameStats? _cachedStats;
 
-  // Получить уникальный ID устройства
   static Future<String> _getDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
     String? deviceId = prefs.getString(_deviceIdKey);
@@ -23,123 +22,91 @@ class StatsService {
     return deviceId;
   }
 
-  static String _generateDeviceId() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = timestamp.toString().split('').reversed.join();
+  static String _getPlatformString() {
     String platform = 'unknown';
 
     if (kIsWeb) {
-      platform = 'web';
+      platform = 'Web';
     } else if (Platform.isAndroid) {
-      platform = 'android';
+      platform = 'Android';
     } else if (Platform.isIOS) {
-      platform = 'ios';
+      platform = 'iOS';
     } else if (Platform.isWindows) {
-      platform = 'windows';
+      platform = 'Windows';
     } else if (Platform.isMacOS) {
-      platform = 'macos';
+      platform = 'macOS';
     } else if (Platform.isLinux) {
-      platform = 'linux';
+      platform = 'Linux';
     }
-
-    return '$platform-$random';
+    return platform;
   }
 
-  // Загрузить статистику
+  static String _generateDeviceId() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final random = timestamp.toString().split('').reversed.join();
+    String platform = _getPlatformString().toLowerCase();
+
+    return 'local_${platform}_$random';
+  }
+
   static Future<GameStats> loadStats() async {
-    if (_cachedStats != null) return _cachedStats!;
+    if (_cachedStats != null) {
+      return _cachedStats!;
+    }
 
     final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_statsKey);
     final deviceId = await _getDeviceId();
-    final statsJson = prefs.getString(_statsKey);
 
-    if (statsJson != null) {
+    if (jsonString != null) {
       try {
-        final decoded = json.decode(statsJson);
-        _cachedStats = GameStats.fromJson(decoded);
-        print('📊 Загружена статистика: ${_cachedStats!.gamesPlayed} игр');
+        final Map<String, dynamic> jsonMap = json.decode(jsonString);
+        _cachedStats = GameStats.fromJson(jsonMap);
         return _cachedStats!;
       } catch (e) {
-        print('❌ Ошибка загрузки статистики: $e');
+        print('Ошибка декодирования статистики: $e. Создаем новую.');
       }
     }
 
     _cachedStats = GameStats(deviceId: deviceId);
-    print('📊 Создана новая статистика');
     return _cachedStats!;
   }
 
-  // Сохранить статистику
   static Future<void> saveStats(GameStats stats) async {
     _cachedStats = stats;
     final prefs = await SharedPreferences.getInstance();
-    final statsJson = json.encode(stats.toJson());
-    await prefs.setString(_statsKey, statsJson);
-    print('💾 Статистика сохранена локально');
+    await prefs.setString(_statsKey, json.encode(stats.toJson()));
   }
 
-  // Записать результат игры (с ручной синхронизацией)
-  static Future<void> recordGame({
-    required bool won,
-    required int attempts,
-  }) async {
+  static Future<void> recordGame({required bool won, required int attempts}) async {
     final stats = await loadStats();
     stats.recordGame(won: won, attempts: attempts);
     await saveStats(stats);
-
-    print('🎮 Результат игры записан: ${won ? "победа" : "поражение"} за $attempts попыток');
-
-    // Синхронизация происходит ТОЛЬКО при нажатии "Новая игра"
-    // Здесь ничего не делаем
+    await syncAfterGame();
   }
 
-  // Ручная синхронизация - вызывается при нажатии "Новая игра"
-  static Future<void> syncNow() async {
-    try {
-      print('🔄 Начинаем синхронизацию при новой игре...');
-      await SyncService().syncAfterGame();
-      print('✅ Синхронизация завершена');
-    } catch (e) {
-      print('⚠️ Ошибка синхронизации: $e');
-      // Продолжаем работу даже если синхронизация не удалась
-    }
-  }
-
-  // Сброс статистики
   static Future<void> resetStats() async {
+    print('🚨 Сброс статистики...');
     final deviceId = await _getDeviceId();
+
     final newStats = GameStats(deviceId: deviceId);
+
     await saveStats(newStats);
 
-    // Синхронизируем сброс с облаком
-    try {
-      await SyncService().syncAfterGame();
-    } catch (e) {
-      print('❌ Ошибка синхронизации после сброса: $e');
-    }
+    await SyncService().forcePushLocalStats();
+
+    print('✅ Статистика сброшена и синхронизирована с облаком.');
   }
 
-  // Получить информацию о платформе
   static String getPlatformInfo() {
-    if (kIsWeb) {
-      return 'Web';
-    } else if (Platform.isAndroid) {
-      return 'Android';
-    } else if (Platform.isIOS) {
-      return 'iOS';
-    } else if (Platform.isWindows) {
-      return 'Windows';
-    } else if (Platform.isMacOS) {
-      return 'macOS';
-    } else if (Platform.isLinux) {
-      return 'Linux';
-    }
-    return 'Unknown';
+    return _getPlatformString();
   }
 
-  // Принудительно обновить кэш из локального хранилища
-  static Future<void> refreshCache() async {
-    _cachedStats = null;
-    await loadStats();
+  static Future<void> syncNow() async {
+    return SyncService().forceSync();
+  }
+
+  static Future<void> syncAfterGame() async {
+    return SyncService().syncAfterGame();
   }
 }
